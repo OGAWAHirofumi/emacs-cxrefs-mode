@@ -64,6 +64,7 @@
 	(program-args '("-l"))
 	(buffer (generate-new-buffer "*Cscope-Process*"))
 	process)
+    (buffer-disable-undo buffer)
     (when (and (not (eq option 'rebuild)) (cxrefs-cscope-check-db ctx))
       (push "-d" program-args))
     (setq process (apply 'start-process "Cscope-Process" buffer
@@ -158,6 +159,7 @@
 	(default-directory (cxrefs-ctx-dir-get ctx))
 	(buffer (generate-new-buffer "*Gtags-Process*"))
 	process)
+    (buffer-disable-undo buffer)
     (setq process (start-process "Gtags-Process" buffer cxrefs-gtags-program))
     (set-process-query-on-exit-flag process nil)
     ;; Wait prompt
@@ -609,6 +611,7 @@
 	 (select-buffer-name (format "*Cxrefs (%s)*" string))
 	 (old-buffer (cxrefs-selbuf-current (cxrefs-ctx-selbuf-get ctx)))
 	 (buffer (generate-new-buffer select-buffer-name)))
+    (buffer-disable-undo buffer)
     (cxrefs-ctx-window-config-set ctx (current-window-configuration))
     (cxrefs-marker-push (cxrefs-ctx-marker-get ctx))
     (cxrefs-selbuf-push (cxrefs-ctx-selbuf-get ctx) buffer)
