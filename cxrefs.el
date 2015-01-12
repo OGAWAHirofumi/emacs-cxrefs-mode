@@ -101,7 +101,7 @@
       (accept-process-output process)
       (goto-char (point-min))
       (while (re-search-forward
-	      "^\\(.+\\) \\(\\S-+\\) \\([0-9]+\\) \\(.*\\)" nil t)
+	      "^\\(.+?\\) \\(\\S-+?\\) \\([0-9]+?\\) \\(.*\\)" nil t)
 	(let ((file (match-string 1))
 	      (func (match-string 2))
 	      (line (match-string 3))
