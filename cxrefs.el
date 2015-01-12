@@ -288,7 +288,7 @@
 	(identity file)
       (concat basedir file))))
 
-(defun cxrefs-xref-output (buffer ctx string xref)
+(defun cxrefs-xref-output (buffer ctx cmd-type string xref)
   (let ((func-max (apply 'max cxrefs-min-function-width
 			 (mapcar (lambda (x) (plist-get x :func-len)) xref)))
 	(loc-max (apply 'max cxrefs-min-location-width
@@ -300,7 +300,7 @@
 	(insert "-*- mode: cxrefs-select -*-\n")
 	(insert (format "Dir: %s\n" (cxrefs-ctx-dir-get ctx)))
 	(insert (format "Backend: %s\n" (cxrefs-ctx-backend ctx)))
-	(insert (format "Find: %s\n" string))
+	(insert (format "Find[%s]: %s\n" cmd-type string))
 	(insert "\n")
 	(dolist (x xref)
 	  ;; Insert xrefs
@@ -620,7 +620,7 @@
       (pop-to-buffer buffer))
     ;; Insert cxrefs-select output
     (let ((xref (cxrefs-xref-command ctx cmd-type string arg)))
-      (cxrefs-xref-output buffer ctx string xref))
+      (cxrefs-xref-output buffer ctx cmd-type string xref))
     (goto-char (point-min))
     (cxrefs-select-mode)
     (run-hooks 'cxrefs-run-command-hook)))
@@ -866,7 +866,7 @@ with no args, if that value is non-nil.
 (defvar cxrefs-select-font-lock-keywords
   `((,cxrefs-select-output-basedir (1 'font-lock-keyword-face))
     (,cxrefs-select-output-backend (1 'font-lock-string-face))
-    ("^Find: \\(.*\\)$" (1 'font-lock-string-face))
+    ("^Find\\[.+?\\]: \\(.*\\)$" (1 'font-lock-string-face))
     (,cxrefs-output-line-regexp
      (,cxrefs-output-func-place 'font-lock-function-name-face)
      (,cxrefs-output-file-place 'font-lock-keyword-face)
