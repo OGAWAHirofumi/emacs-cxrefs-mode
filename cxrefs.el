@@ -679,6 +679,14 @@
   (interactive (list (cxrefs-read-string "Find assignments to this: " 'symbol)))
   (cxrefs-run-command 'assign string))
 
+(defun cxrefs-toggle-case ()
+  "Toggle ignore/use letter case."
+  (interactive)
+  (let ((ctx (cxrefs-context-current)))
+    (when ctx
+      (cxrefs-backend-command ctx 'toggle-case)
+      (message "Toggle case cxrefs"))))
+
 (defun cxrefs-rebuild ()
   "Rebuild cross reference database."
   (interactive)
@@ -886,6 +894,7 @@ with no args, if that value is non-nil.
     (define-key map "="		'cxrefs-find-assign)
     (define-key map "h"		'cxrefs-find-caller-hierarchy)
     (define-key map "H"		'cxrefs-find-callee-hierarchy)
+    (define-key map "C"		'cxrefs-toggle-case)
     (define-key map "R"		'cxrefs-rebuild)
     (define-key map "\C-c\C-c"	'cxrefs-select-interpret-line)
     (define-key map "\C-m"	'cxrefs-select-interpret-line)
