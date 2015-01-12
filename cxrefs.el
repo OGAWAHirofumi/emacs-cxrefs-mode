@@ -573,29 +573,34 @@
   (cxrefs-check-and-build-db))
 
 ;; Make hierarchy by reverse order
-(defun cxrefs-xref-hierarchy2 (ctx cmd-type func whole depth max-depth arrow)
+(defun cxrefs-xref-hierarchy2 (ctx cmd-type func whole depth max-depth
+				   arrow exclude)
   (let ((prefix (format "%s%s" (make-string depth ? ) arrow))
-	(xref (cxrefs-backend-command ctx cmd-type func))
-	next-func)
+	(xref (cxrefs-backend-command ctx cmd-type func)))
     (dolist (x xref whole)
-      (setq next-func (plist-get x :func))
-      ;; Add hierarchy annotation to function
-      (let ((prefix-func (format "%s %s" prefix next-func)))
-	(setq x (plist-put x :func prefix-func))
-	(setq x (plist-put x :func-len (length prefix-func))))
-      ;; Make whole list by reverse order
-      (push (plist-put x :depth depth) whole)
-      (when (< depth max-depth)
-	(setq whole (cxrefs-xref-hierarchy2 ctx cmd-type next-func whole
-					    (1+ depth) max-depth arrow))
-	))))
+      (let ((next-func (plist-get x :func))
+	    (file (plist-get x :file)))
+	(when (or (string= exclude "") (not (string-match exclude file)))
+	  ;; Add hierarchy annotation to function
+	  (let ((prefix-func (format "%s %s" prefix next-func)))
+	    (setq x (plist-put x :func prefix-func))
+	    (setq x (plist-put x :func-len (length prefix-func))))
+	  ;; Make whole list by reverse order
+	  (push (plist-put x :depth depth) whole)
+	  (when (< depth max-depth)
+	    (setq whole (cxrefs-xref-hierarchy2 ctx cmd-type next-func whole
+						(1+ depth) max-depth
+						arrow exclude)))))
+      )))
 (defun cxrefs-xref-hierarchy (ctx cmd-type string args)
   (let* ((max-depth (nth 0 args))
+	 (exclude (nth 1 args))
 	 (cmd-type-table '((caller-hierarchy caller "<-")
 			   (callee-hierarchy callee "->")))
 	 (type (nth 1 (assoc cmd-type cmd-type-table)))
 	 (arrow (nth 2 (assoc cmd-type cmd-type-table))))
-    (nreverse (cxrefs-xref-hierarchy2 ctx type string nil 0 max-depth arrow))))
+    (nreverse (cxrefs-xref-hierarchy2 ctx type string nil 0 max-depth
+				      arrow exclude))))
 
 (defun cxrefs-xref-command (ctx cmd-type string args)
   (if (or (eq cmd-type 'caller-hierarchy) (eq cmd-type 'callee-hierarchy))
@@ -705,17 +710,19 @@
   (setq cxrefs-basedir nil)
   (message "Quit cxrefs"))
 
-(defun cxrefs-find-caller-hierarchy (string depth)
+(defun cxrefs-find-caller-hierarchy (string depth exclude)
   "Find hierarchical callers of STRING."
   (interactive (list (cxrefs-read-string "Find hierarchical callers: " 'symbol)
-		     (read-number "Depth: " cxrefs-hierarchy-depth)))
-  (cxrefs-run-command 'caller-hierarchy string depth))
+		     (read-number "Depth: " cxrefs-hierarchy-depth)
+		     (read-string "Exclude files matching this regexp: ")))
+  (cxrefs-run-command 'caller-hierarchy string depth exclude))
 
-(defun cxrefs-find-callee-hierarchy (string depth)
+(defun cxrefs-find-callee-hierarchy (string depth exclude)
   "Find hierarchical callee of STRING."
   (interactive (list (cxrefs-read-string "Find hierarchical callees: " 'symbol)
-		     (read-number "Depth: " cxrefs-hierarchy-depth)))
-  (cxrefs-run-command 'callee-hierarchy string depth))
+		     (read-number "Depth: " cxrefs-hierarchy-depth)
+		     (read-string "Exclude files matching this regexp: ")))
+  (cxrefs-run-command 'callee-hierarchy string depth exclude))
 
 (defun cxrefs-back-and-next-select ()
   "Return to the cxrefs-select buffer and advance the cursor by one line."
