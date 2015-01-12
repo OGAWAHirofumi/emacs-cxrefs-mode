@@ -648,10 +648,10 @@
   (interactive (list (cxrefs-read-string "Find caller of this: " 'symbol)))
   (cxrefs-run-command 'caller string))
 
-(defun cxrefs-find-string (string)
+(defun cxrefs-find-text (string)
   "Find this text STRING."
   (interactive (list (cxrefs-read-string "Find this text: " 'text)))
-  (cxrefs-run-command 'string string))
+  (cxrefs-run-command 'text string))
 
 (defun cxrefs-find-grep (string)
   "Find this grep pattern STRING."
@@ -732,7 +732,7 @@
     (define-key map "\C-cc"	'cxrefs-find-symbol)
     (define-key map "\C-cv"	'cxrefs-find-callee)
     (define-key map "\C-c^"	'cxrefs-find-caller)
-    (define-key map "\C-ct"	'cxrefs-find-string)
+    (define-key map "\C-ct"	'cxrefs-find-text)
     (define-key map "\C-cg"	'cxrefs-find-grep)
     (define-key map "\C-ce"	'cxrefs-find-egrep)
     (define-key map "\C-cf"	'cxrefs-find-file)
@@ -878,7 +878,7 @@ with no args, if that value is non-nil.
     (define-key map "c"		'cxrefs-find-symbol)
     (define-key map "v"		'cxrefs-find-callee)
     (define-key map "^"		'cxrefs-find-caller)
-    (define-key map "t"		'cxrefs-find-string)
+    (define-key map "t"		'cxrefs-find-text)
     (define-key map "g"		'cxrefs-find-grep)
     (define-key map "e"		'cxrefs-find-egrep)
     (define-key map "f"		'cxrefs-find-file)
