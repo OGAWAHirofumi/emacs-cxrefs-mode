@@ -137,8 +137,58 @@
 				:build-db-fn cxrefs-cscope-build-db
 				:command-fn cxrefs-cscope-command))
 
+(defgroup cxrefs-gtags nil
+  "Cxrefs gtags backend."
+  :version "25.1"
+  :group 'cxrefs-gtags)
+
+(defcustom cxrefs-gtags-program "gtags-cscope"
+  "The name of the gtags executable."
+  :group 'cxrefs-gtags)
+
+(defcustom cxrefs-gtags-build-program "gtags"
+  "The name of the gtags executable to make database."
+  :group 'cxrefs-gtags)
+
+(defun cxrefs-gtags-check-db (ctx)
+  (file-exists-p (concat (cxrefs-ctx-dir-get ctx) "GTAGS")))
+
+(defun cxrefs-gtags-init (ctx &optional _option)
+  (let ((process-connection-type nil) ; use a pipe
+	(default-directory (cxrefs-ctx-dir-get ctx))
+	(buffer (generate-new-buffer "*Gtags-Process*"))
+	process)
+    (setq process (start-process "Gtags-Process" buffer cxrefs-gtags-program))
+    (set-process-query-on-exit-flag process nil)
+    ;; Wait prompt
+    (accept-process-output process)
+    process))
+
+(defun cxrefs-gtags-build-db (ctx)
+  "Build GTAGS."
+  (let* ((basedir (cxrefs-ctx-dir-get ctx))
+	 (command cxrefs-gtags-build-program)
+	 (default-directory basedir))
+    ;; Build cscope.files
+    (unless (= 0 (shell-command command))
+      (error "Couldn't create cscope.files"))))
+
+(defun cxrefs-gtags-command (ctx cmd-type &optional string)
+  (if (not (eq cmd-type 'rebuild))
+      (cxrefs-cscope-command ctx cmd-type string)
+    ;; rebuild
+    (cxrefs-process-init ctx 'rebuild)
+    (cxrefs-cscope-make-xref ctx "r" "")))
+
+(defvar cxrefs-backend-gtags '("gtags"
+				:init-fn cxrefs-gtags-init
+				:check-db-fn cxrefs-gtags-check-db
+				:build-db-fn cxrefs-gtags-build-db
+				:command-fn cxrefs-gtags-command))
+
 (defvar cxrefs-backends
-  (list cxrefs-backend-cscope)
+  (list cxrefs-backend-cscope
+	cxrefs-backend-gtags)
   "Cxrefs backend list.")
 
 (defgroup cxrefs nil
