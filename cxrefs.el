@@ -183,10 +183,10 @@
     (cxrefs-cscope-make-xref ctx "r" "")))
 
 (defvar cxrefs-backend-gtags '("gtags"
-				:init-fn cxrefs-gtags-init
-				:check-db-fn cxrefs-gtags-check-db
-				:build-db-fn cxrefs-gtags-build-db
-				:command-fn cxrefs-gtags-command))
+			       :init-fn cxrefs-gtags-init
+			       :check-db-fn cxrefs-gtags-check-db
+			       :build-db-fn cxrefs-gtags-build-db
+			       :command-fn cxrefs-gtags-command))
 
 (defvar cxrefs-backends
   (list cxrefs-backend-cscope
@@ -541,7 +541,7 @@
   "Tell tags commands to use tag table file FILE."
   (let* ((file-name-history (cxrefs-basedir-list))
 	 (basedir (read-directory-name "Locate root directory: "
-				    default-directory default-directory t)))
+				       default-directory default-directory t)))
     ;; Make sure the last char of "root" is `/'
     (file-name-as-directory (expand-file-name basedir))))
 
@@ -573,39 +573,36 @@
   (cxrefs-check-and-build-db))
 
 ;; Make hierarchy by reverse order
-(defun cxrefs-xref-hierarchy2 (ctx cmd-type string prefix depth max-depth whole)
-  (if (= depth max-depth)
-      whole
-    (let* ((xref (cxrefs-backend-command ctx cmd-type string)))
-      (dolist (x xref whole)
-	(setq string (plist-get x :func))
-	;; Add hierarchy annotation to function
-	(let* ((spc (make-string depth ? ))
-	       (func (format "%s%s %s" spc prefix string)))
-	  (setq x (plist-put x :func func))
-	  (setq x (plist-put x :func-len (length func))))
-	;; Make whole list by reverse order
-	(push (plist-put x :depth depth) whole)
-	(setq whole (cxrefs-xref-hierarchy2 ctx cmd-type string prefix
-					    (1+ depth) max-depth whole))
+(defun cxrefs-xref-hierarchy2 (ctx cmd-type func whole depth max-depth arrow)
+  (let ((prefix (format "%s%s" (make-string depth ? ) arrow))
+	(xref (cxrefs-backend-command ctx cmd-type func))
+	next-func)
+    (dolist (x xref whole)
+      (setq next-func (plist-get x :func))
+      ;; Add hierarchy annotation to function
+      (let ((prefix-func (format "%s %s" prefix next-func)))
+	(setq x (plist-put x :func prefix-func))
+	(setq x (plist-put x :func-len (length prefix-func))))
+      ;; Make whole list by reverse order
+      (push (plist-put x :depth depth) whole)
+      (when (< depth max-depth)
+	(setq whole (cxrefs-xref-hierarchy2 ctx cmd-type next-func whole
+					    (1+ depth) max-depth arrow))
 	))))
-(defun cxrefs-xref-hierarchy (ctx cmd-type string max-depth)
-  (let (type prefix)
-    (cond
-     ((eq cmd-type 'caller-hierarchy)
-      (setq type 'caller)
-      (setq prefix "<-"))
-     ((eq cmd-type 'callee-hierarchy)
-      (setq type 'callee)
-      (setq prefix "->")))
-    (nreverse (cxrefs-xref-hierarchy2 ctx type string prefix 0 max-depth nil))))
+(defun cxrefs-xref-hierarchy (ctx cmd-type string args)
+  (let* ((max-depth (nth 0 args))
+	 (cmd-type-table '((caller-hierarchy caller "<-")
+			   (callee-hierarchy callee "->")))
+	 (type (nth 1 (assoc cmd-type cmd-type-table)))
+	 (arrow (nth 2 (assoc cmd-type cmd-type-table))))
+    (nreverse (cxrefs-xref-hierarchy2 ctx type string nil 0 max-depth arrow))))
 
-(defun cxrefs-xref-command (ctx cmd-type string &optional arg)
+(defun cxrefs-xref-command (ctx cmd-type string args)
   (if (or (eq cmd-type 'caller-hierarchy) (eq cmd-type 'callee-hierarchy))
-      (cxrefs-xref-hierarchy ctx cmd-type string arg)
+      (cxrefs-xref-hierarchy ctx cmd-type string args)
     (cxrefs-backend-command ctx cmd-type string)))
 
-(defun cxrefs-run-command (cmd-type string &optional arg)
+(defun cxrefs-run-command (cmd-type string &rest args)
   (cxrefs-check-tags-table)
   (let* ((ctx (cxrefs-context-current))
 	 (select-buffer-name (format "*Cxrefs (%s)*" string))
@@ -622,7 +619,7 @@
 	  (switch-to-buffer buffer))
       (pop-to-buffer buffer))
     ;; Insert cxrefs-select output
-    (let ((xref (cxrefs-xref-command ctx cmd-type string arg)))
+    (let ((xref (cxrefs-xref-command ctx cmd-type string args)))
       (cxrefs-xref-output buffer ctx cmd-type string xref))
     (goto-char (point-min))
     (cxrefs-select-mode)
@@ -673,7 +670,7 @@
 
 (defun cxrefs-find-includer (string)
   "Find files #including this file STRING."
-  (interactive (list 
+  (interactive (list
 		(cxrefs-read-string "Find files #including this: " 'filename)))
   (cxrefs-run-command 'includer string))
 
