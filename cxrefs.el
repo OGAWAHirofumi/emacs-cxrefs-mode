@@ -59,11 +59,10 @@
   (file-exists-p (concat (cxrefs-ctx-dir-get ctx) "cscope.out")))
 
 (defun cxrefs-cscope-wait-prompt (process)
-  (accept-process-output process)
-  (goto-char (point-min))
-  (while (not (re-search-forward "^>> $" nil t))
-    (accept-process-output process)
-    (goto-char (point-min))))
+  (while (and (processp process) (eq (process-status process) 'run)
+	      (goto-char (point-min))
+	      (not (re-search-forward "^>> $" nil t)))
+    (accept-process-output process)))
 
 (defun cxrefs-cscope-init (ctx &optional option)
   (let ((process-connection-type nil) ; use a pipe
