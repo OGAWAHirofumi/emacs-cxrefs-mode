@@ -58,6 +58,13 @@
 (defun cxrefs-cscope-check-db (ctx)
   (file-exists-p (concat (cxrefs-ctx-dir-get ctx) "cscope.out")))
 
+(defun cxrefs-cscope-wait-prompt (process)
+  (accept-process-output process)
+  (goto-char (point-min))
+  (while (not (re-search-forward "^>> $" nil t))
+    (accept-process-output process)
+    (goto-char (point-min))))
+
 (defun cxrefs-cscope-init (ctx &optional option)
   (let ((process-connection-type nil) ; use a pipe
 	(default-directory (cxrefs-ctx-dir-get ctx))
@@ -70,8 +77,8 @@
     (setq process (apply 'start-process "Cscope-Process" buffer
 			 cxrefs-cscope-program program-args))
     (set-process-query-on-exit-flag process nil)
-    ;; Wait prompt
-    (accept-process-output process)
+    (with-current-buffer (process-buffer process)
+      (cxrefs-cscope-wait-prompt process))
     process))
 
 (defun cxrefs-cscope-ask-files-command (basedir)
@@ -99,7 +106,7 @@
     (with-current-buffer (process-buffer process)
       (erase-buffer)
       (process-send-string process (concat command string "\n"))
-      (accept-process-output process)
+      (cxrefs-cscope-wait-prompt process)
       (goto-char (point-min))
       (while (re-search-forward
 	      "^\\(.+?\\) \\(\\S-+?\\) \\([0-9]+?\\) \\(.*\\)" nil t)
