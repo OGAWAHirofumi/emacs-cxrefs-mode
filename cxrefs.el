@@ -308,19 +308,25 @@
 	(identity file)
       (concat basedir file))))
 
-(defun cxrefs-xref-output (buffer ctx cmd-type string xref)
+(defun cxrefs-xref-output (buffer ctx cmd-type string filter xref)
   (let ((func-max (apply 'max cxrefs-min-function-width
 			 (mapcar (lambda (x) (plist-get x :func-len)) xref)))
 	(loc-max (apply 'max cxrefs-min-location-width
 			(mapcar (lambda (x) (plist-get x :loc-len)) xref))))
     (with-current-buffer buffer
       (let ((loc-width (number-to-string loc-max))
-	    (func-width (number-to-string func-max)))
+	    (func-width (number-to-string func-max))
+	    (exclude (nth 0 filter))
+	    (include (nth 1 filter)))
 	;; Insert headers
 	(insert "-*- mode: cxrefs-select -*-\n")
 	(insert (format "Dir: %s\n" (cxrefs-ctx-dir-get ctx)))
 	(insert (format "Backend: %s\n" (cxrefs-ctx-backend ctx)))
 	(insert (format "Find[%s]: %s\n" cmd-type string))
+	(when exclude
+	  (insert (format "Exclude: %s\n" exclude)))
+	(when include
+	  (insert (format "Include: %s\n" include)))
 	(insert "\n")
 	(dolist (x xref)
 	  ;; Insert xrefs
@@ -549,7 +555,7 @@
 	(switch-to-buffer prev)))))
 
 ;; Hooks
-(defvar cxrefs-run-command-hook nil)
+(defvar cxrefs-show-xref-select-hook nil)
 (defvar cxrefs-back-and-next-select-hook nil)
 (defvar cxrefs-file-not-found-hook nil)
 (defvar cxrefs-select-interpret-line-hook nil)
@@ -605,12 +611,15 @@
 			  x)))
 		    xref)))))
 
+(defun cxrefs-backend-command-with-filter (ctx cmd-type string filter)
+  (cxrefs-xref-filter filter
+		      (cxrefs-backend-command ctx cmd-type string)))
+
 ;; Make hierarchy by reverse order
 (defun cxrefs-xref-hierarchy2 (ctx cmd-type func whole depth max-depth
 				   arrow filter)
   (let ((prefix (format "%s%s" (make-string depth ? ) arrow))
-	(xref (cxrefs-xref-filter filter
-				  (cxrefs-backend-command ctx cmd-type func))))
+	(xref (cxrefs-backend-command-with-filter ctx cmd-type func filter)))
     (dolist (x xref whole)
       (let ((next-func (plist-get x :func)))
 	;; Add hierarchy annotation to function
@@ -624,9 +633,8 @@
 					      (1+ depth) max-depth
 					      arrow filter)))))
     ))
-(defun cxrefs-xref-hierarchy (ctx cmd-type string args)
+(defun cxrefs-xref-hierarchy (ctx cmd-type string filter args)
   (let* ((max-depth (nth 0 args))
-	 (filter (nth 1 args))
 	 (cmd-type-table '((caller-hierarchy caller "<-")
 			   (callee-hierarchy callee "->")))
 	 (type (nth 1 (assoc cmd-type cmd-type-table)))
@@ -634,16 +642,14 @@
     (nreverse (cxrefs-xref-hierarchy2 ctx type string nil 0 max-depth
 				      arrow filter))))
 
-(defun cxrefs-xref-command (ctx cmd-type string args)
+(defun cxrefs-xref-command (ctx cmd-type string filter args)
   (cond
    ((or (eq cmd-type 'caller-hierarchy) (eq cmd-type 'callee-hierarchy))
-    (cxrefs-xref-hierarchy ctx cmd-type string args))
+    (cxrefs-xref-hierarchy ctx cmd-type string filter args))
    (t
-    (let ((filter (nth 0 args)))
-      (cxrefs-xref-filter filter
-			  (cxrefs-backend-command ctx cmd-type string))))))
+    (cxrefs-backend-command-with-filter ctx cmd-type string filter))))
 
-(defun cxrefs-run-command (cmd-type string &rest args)
+(defun cxrefs-show-xref-select (cmd-type string filter &rest args)
   (cxrefs-check-tags-table)
   (let* ((ctx (cxrefs-context-current))
 	 (select-buffer-name (format "*Cxrefs (%s)*" string))
@@ -660,11 +666,11 @@
 	  (switch-to-buffer buffer))
       (pop-to-buffer buffer))
     ;; Insert cxrefs-select output
-    (let ((xref (cxrefs-xref-command ctx cmd-type string args)))
-      (cxrefs-xref-output buffer ctx cmd-type string xref))
+    (let ((xref (cxrefs-xref-command ctx cmd-type string filter args)))
+      (cxrefs-xref-output buffer ctx cmd-type string filter xref))
     (goto-char (point-min))
     (cxrefs-select-mode)
-    (run-hooks 'cxrefs-run-command-hook)))
+    (run-hooks 'cxrefs-show-xref-select-hook)))
 
 (defun cxrefs-read-string (prompt-prefix type)
   (let* ((default (thing-at-point type))
@@ -702,62 +708,62 @@
   "Query the definition of the given STRING."
   (interactive (list (cxrefs-read-string "Find this definition" 'symbol)
 		     (and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'define string filter))
+  (cxrefs-show-xref-select 'define string filter))
 
 (defun cxrefs-find-symbol (string filter)
   "Find this symbol STRING."
   (interactive (list (cxrefs-read-string "Find this symbol" 'symbol)
 		     (and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'symbol string filter))
+  (cxrefs-show-xref-select 'symbol string filter))
 
 (defun cxrefs-find-callee (string filter)
   "Find callee of symbol STRING."
   (interactive (list (cxrefs-read-string "Find callee of this" 'symbol)
 		     (and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'callee string filter))
+  (cxrefs-show-xref-select 'callee string filter))
 
 (defun cxrefs-find-caller (string filter)
   "Find caller of symbol STRING."
   (interactive (list (cxrefs-read-string "Find caller of this" 'symbol)
 		     (and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'caller string filter))
+  (cxrefs-show-xref-select 'caller string filter))
 
 (defun cxrefs-find-text (string filter)
   "Find this text STRING."
   (interactive (list (cxrefs-read-string "Find this text" 'text)
 		     (and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'text string filter))
+  (cxrefs-show-xref-select 'text string filter))
 
 (defun cxrefs-find-grep (string filter)
   "Find this grep pattern STRING."
   (interactive (list (cxrefs-read-string "Find this grep pattern" 'text)
 		     (and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'grep string filter))
+  (cxrefs-show-xref-select 'grep string filter))
 
 (defun cxrefs-find-egrep (string filter)
   "Find this egrep pattern STRING."
   (interactive (list (cxrefs-read-string "Find this egrep pattern" 'text)
 		     (and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'egrep string filter))
+  (cxrefs-show-xref-select 'egrep string filter))
 
 (defun cxrefs-find-file (string filter)
   "Find this file STRING."
   (interactive (list (cxrefs-read-string "Find this file" 'filename)
 		     (and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'file string filter))
+  (cxrefs-show-xref-select 'file string filter))
 
 (defun cxrefs-find-includer (string filter)
   "Find files #including this file STRING."
   (interactive (list
 		(cxrefs-read-string "Find files #including this" 'filename)
 		(and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'includer string filter))
+  (cxrefs-show-xref-select 'includer string filter))
 
 (defun cxrefs-find-assign (string filter)
   "Find assignments to this symbol STRING."
   (interactive (list (cxrefs-read-string "Find assignments to this" 'symbol)
 		(and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'assign string filter))
+  (cxrefs-show-xref-select 'assign string filter))
 
 (defun cxrefs-toggle-case ()
   "Toggle ignore/use letter case."
@@ -790,14 +796,14 @@
   (interactive (list (cxrefs-read-string "Find hierarchical callers" 'symbol)
 		     (cxrefs-read-depth)
 		     (and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'caller-hierarchy string depth filter))
+  (cxrefs-show-xref-select 'caller-hierarchy string filter depth))
 
 (defun cxrefs-find-callee-hierarchy (string depth filter)
   "Find hierarchical callee of STRING."
   (interactive (list (cxrefs-read-string "Find hierarchical callees" 'symbol)
 		     (cxrefs-read-depth)
 		     (and current-prefix-arg (cxrefs-read-filter))))
-  (cxrefs-run-command 'callee-hierarchy string depth filter))
+  (cxrefs-show-xref-select 'callee-hierarchy string filter depth))
 
 (defun cxrefs-back-and-next-select ()
   "Return to the cxrefs-select buffer and advance the cursor by one line."
@@ -949,6 +955,8 @@ with no args, if that value is non-nil.
   `((,cxrefs-select-output-basedir (1 'font-lock-keyword-face))
     (,cxrefs-select-output-backend (1 'font-lock-string-face))
     ("^Find\\[.+?\\]: \\(.*\\)$" (1 'font-lock-string-face))
+    ("^Exclude: \\(.*\\)$" (1 'font-lock-string-face))
+    ("^Include: \\(.*\\)$" (1 'font-lock-string-face))
     (,cxrefs-output-line-regexp
      (,cxrefs-output-func-place 'font-lock-function-name-face)
      (,cxrefs-output-file-place 'font-lock-keyword-face)
