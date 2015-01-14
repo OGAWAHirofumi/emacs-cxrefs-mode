@@ -234,6 +234,10 @@
 (defvar cxrefs-exclude-history nil
   "Default exclude regexp history list.")
 
+;; FIXME: make this per context
+(defvar cxrefs-include-history nil
+  "Default include regexp history list.")
+
 (defun cxrefs-ctx-backend-set (ctx backend)
   (setq ctx (plist-put ctx :backend backend)))
 (defun cxrefs-ctx-process-get (ctx)
@@ -586,19 +590,26 @@
     (cxrefs-context-make cxrefs-basedir))
   (cxrefs-check-and-build-db))
 
-;; Filter out if match to exclude regexp
-(defun cxrefs-xref-filter (exclude xref)
-  (if (not exclude)
-      xref
-    (delq nil (mapcar (lambda (x)
-			(if (string-match exclude (plist-get x :file)) nil x))
-		      xref))))
+;; Filter out if matches exclude regexp, but not matches include regexp
+(defun cxrefs-xref-filter (filter xref)
+  (let ((exclude (nth 0 filter))
+	(include (nth 1 filter)))
+    (if (not exclude)
+	xref
+      (delq nil
+	    (mapcar (lambda (x)
+		      (let* ((file (plist-get x :file))
+			     (force (and include (string-match include file))))
+			(if (and (not force) (string-match exclude file))
+			    nil
+			  x)))
+		    xref)))))
 
 ;; Make hierarchy by reverse order
 (defun cxrefs-xref-hierarchy2 (ctx cmd-type func whole depth max-depth
-				   arrow exclude)
+				   arrow filter)
   (let ((prefix (format "%s%s" (make-string depth ? ) arrow))
-	(xref (cxrefs-xref-filter exclude
+	(xref (cxrefs-xref-filter filter
 				  (cxrefs-backend-command ctx cmd-type func))))
     (dolist (x xref whole)
       (let ((next-func (plist-get x :func)))
@@ -611,25 +622,25 @@
 	(when (< depth max-depth)
 	  (setq whole (cxrefs-xref-hierarchy2 ctx cmd-type next-func whole
 					      (1+ depth) max-depth
-					      arrow exclude)))))
+					      arrow filter)))))
     ))
 (defun cxrefs-xref-hierarchy (ctx cmd-type string args)
   (let* ((max-depth (nth 0 args))
-	 (exclude (nth 1 args))
+	 (filter (nth 1 args))
 	 (cmd-type-table '((caller-hierarchy caller "<-")
 			   (callee-hierarchy callee "->")))
 	 (type (nth 1 (assoc cmd-type cmd-type-table)))
 	 (arrow (nth 2 (assoc cmd-type cmd-type-table))))
     (nreverse (cxrefs-xref-hierarchy2 ctx type string nil 0 max-depth
-				      arrow exclude))))
+				      arrow filter))))
 
 (defun cxrefs-xref-command (ctx cmd-type string args)
   (cond
    ((or (eq cmd-type 'caller-hierarchy) (eq cmd-type 'callee-hierarchy))
     (cxrefs-xref-hierarchy ctx cmd-type string args))
    (t
-    (let ((exclude (nth 0 args)))
-      (cxrefs-xref-filter exclude
+    (let ((filter (nth 0 args)))
+      (cxrefs-xref-filter filter
 			  (cxrefs-backend-command ctx cmd-type string))))))
 
 (defun cxrefs-run-command (cmd-type string &rest args)
@@ -669,71 +680,84 @@
 	nil
       string)))
 
+(defun cxrefs-read-include ()
+  (let ((string (read-regexp "Include files matching this regexp: "
+			     nil 'cxrefs-include-history)))
+    (if (string= string "")
+	nil
+      string)))
+
+(defun cxrefs-read-filter ()
+  (let ((exclude (cxrefs-read-exclude)))
+    (if (not exclude)
+	nil
+      (list exclude (cxrefs-read-include)))))
+
 (defun cxrefs-read-depth ()
   ;; Don't add to history
   (let ((history-add-new-input nil))
     (read-number "Depth: " cxrefs-hierarchy-depth)))
 
-(defun cxrefs-find-definition (string exclude)
+(defun cxrefs-find-definition (string filter)
   "Query the definition of the given STRING."
   (interactive (list (cxrefs-read-string "Find this definition" 'symbol)
-		     (and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'define string exclude))
+		     (and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'define string filter))
 
-(defun cxrefs-find-symbol (string exclude)
+(defun cxrefs-find-symbol (string filter)
   "Find this symbol STRING."
   (interactive (list (cxrefs-read-string "Find this symbol" 'symbol)
-		     (and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'symbol string exclude))
+		     (and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'symbol string filter))
 
-(defun cxrefs-find-callee (string exclude)
+(defun cxrefs-find-callee (string filter)
   "Find callee of symbol STRING."
   (interactive (list (cxrefs-read-string "Find callee of this" 'symbol)
-		     (and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'callee string exclude))
+		     (and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'callee string filter))
 
-(defun cxrefs-find-caller (string exclude)
+(defun cxrefs-find-caller (string filter)
   "Find caller of symbol STRING."
   (interactive (list (cxrefs-read-string "Find caller of this" 'symbol)
-		     (and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'caller string exclude))
+		     (and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'caller string filter))
 
-(defun cxrefs-find-text (string exclude)
+(defun cxrefs-find-text (string filter)
   "Find this text STRING."
   (interactive (list (cxrefs-read-string "Find this text" 'text)
-		     (and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'text string exclude))
+		     (and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'text string filter))
 
-(defun cxrefs-find-grep (string exclude)
+(defun cxrefs-find-grep (string filter)
   "Find this grep pattern STRING."
   (interactive (list (cxrefs-read-string "Find this grep pattern" 'text)
-		     (and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'grep string exclude))
+		     (and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'grep string filter))
 
-(defun cxrefs-find-egrep (string exclude)
+(defun cxrefs-find-egrep (string filter)
   "Find this egrep pattern STRING."
   (interactive (list (cxrefs-read-string "Find this egrep pattern" 'text)
-		     (and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'egrep string exclude))
+		     (and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'egrep string filter))
 
-(defun cxrefs-find-file (string exclude)
+(defun cxrefs-find-file (string filter)
   "Find this file STRING."
   (interactive (list (cxrefs-read-string "Find this file" 'filename)
-		     (and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'file string exclude))
+		     (and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'file string filter))
 
-(defun cxrefs-find-includer (string exclude)
+(defun cxrefs-find-includer (string filter)
   "Find files #including this file STRING."
   (interactive (list
 		(cxrefs-read-string "Find files #including this" 'filename)
-		(and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'includer string exclude))
+		(and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'includer string filter))
 
-(defun cxrefs-find-assign (string exclude)
+(defun cxrefs-find-assign (string filter)
   "Find assignments to this symbol STRING."
   (interactive (list (cxrefs-read-string "Find assignments to this" 'symbol)
-		(and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'assign string exclude))
+		(and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'assign string filter))
 
 (defun cxrefs-toggle-case ()
   "Toggle ignore/use letter case."
@@ -761,19 +785,19 @@
   (setq cxrefs-basedir nil)
   (message "Quit cxrefs"))
 
-(defun cxrefs-find-caller-hierarchy (string depth exclude)
+(defun cxrefs-find-caller-hierarchy (string depth filter)
   "Find hierarchical callers of STRING."
   (interactive (list (cxrefs-read-string "Find hierarchical callers" 'symbol)
 		     (cxrefs-read-depth)
-		     (and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'caller-hierarchy string depth exclude))
+		     (and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'caller-hierarchy string depth filter))
 
-(defun cxrefs-find-callee-hierarchy (string depth exclude)
+(defun cxrefs-find-callee-hierarchy (string depth filter)
   "Find hierarchical callee of STRING."
   (interactive (list (cxrefs-read-string "Find hierarchical callees" 'symbol)
 		     (cxrefs-read-depth)
-		     (and current-prefix-arg (cxrefs-read-exclude))))
-  (cxrefs-run-command 'callee-hierarchy string depth exclude))
+		     (and current-prefix-arg (cxrefs-read-filter))))
+  (cxrefs-run-command 'callee-hierarchy string depth filter))
 
 (defun cxrefs-back-and-next-select ()
   "Return to the cxrefs-select buffer and advance the cursor by one line."
