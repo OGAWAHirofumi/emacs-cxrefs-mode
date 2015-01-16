@@ -28,6 +28,7 @@
 
 (require 'ring)
 (require 'thingatpt)
+(require 'cxrefs-glob)
 
 (defgroup cxrefs-cscope nil
   "Cxrefs cscope backend."
@@ -212,6 +213,11 @@
   "Default depth for function hierarchy."
   :group 'cxrefs)
 
+(defcustom cxrefs-use-filter-regexp nil
+  "If non-nil, use filter string as regexp. If nil, use filter
+string as shell pattern matching."
+  :group 'cxrefs)
+
 (defcustom cxrefs-min-location-width 10
   "Minimum width to show filename:line."
   :group 'cxrefs)
@@ -324,9 +330,13 @@
 	(insert (format "Backend: %s\n" (cxrefs-ctx-backend ctx)))
 	(insert (format "Find[%s]: %s\n" cmd-type string))
 	(when exclude
-	  (insert (format "Exclude: %s\n" exclude)))
+	  (insert (format "Exclude[%s]: %s\n"
+			  (if cxrefs-use-filter-regexp "regexp" "pattern")
+			  exclude)))
 	(when include
-	  (insert (format "Include: %s\n" include)))
+	  (insert (format "Include[%s]: %s\n"
+			  (if cxrefs-use-filter-regexp "regexp" "pattern")
+			  include)))
 	(insert "\n")
 	(dolist (x xref)
 	  ;; Insert xrefs
@@ -643,6 +653,9 @@
 				      arrow filter))))
 
 (defun cxrefs-xref-command (ctx cmd-type string filter args)
+  ;; convert pattern to regexp
+  (when (and filter (not cxrefs-use-filter-regexp))
+    (setq filter (mapcar 'cxrefs-pattern-to-regexp filter)))
   (cond
    ((or (eq cmd-type 'caller-hierarchy) (eq cmd-type 'callee-hierarchy))
     (cxrefs-xref-hierarchy ctx cmd-type string filter args))
