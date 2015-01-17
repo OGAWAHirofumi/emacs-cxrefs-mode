@@ -238,11 +238,11 @@ string as shell pattern matching."
 
 ;; FIXME: make this per context
 (defvar cxrefs-exclude-history nil
-  "Default exclude regexp history list.")
+  "Default exclude regexp/pattern history list.")
 
 ;; FIXME: make this per context
 (defvar cxrefs-include-history nil
-  "Default include regexp history list.")
+  "Default include regexp/pattern history list.")
 
 (defun cxrefs-ctx-backend-set (ctx backend)
   (setq ctx (plist-put ctx :backend backend)))
@@ -693,15 +693,19 @@ string as shell pattern matching."
     (read-string prompt nil 'cxrefs-string-history default)))
 
 (defun cxrefs-read-exclude ()
-  (let ((string (read-regexp "Exclude files matching this regexp: "
-			     nil 'cxrefs-exclude-history)))
+  (let ((string (read-regexp
+		 (format "Exclude files matching this %s: "
+			 (if cxrefs-use-filter-regexp "regexp" "pattern"))
+		 nil 'cxrefs-exclude-history)))
     (if (string= string "")
 	nil
       string)))
 
 (defun cxrefs-read-include ()
-  (let ((string (read-regexp "Include files matching this regexp: "
-			     nil 'cxrefs-include-history)))
+  (let ((string (read-regexp
+		 (format"Include files matching this %s: "
+			(if cxrefs-use-filter-regexp "regexp" "pattern"))
+		 nil 'cxrefs-include-history)))
     (if (string= string "")
 	nil
       string)))
