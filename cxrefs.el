@@ -88,7 +88,7 @@
 			  (car cxrefs-cscope-build-files-history)
 			  '(cxrefs-cscope-build-files-history . 1))))
     (when (string= cmd "")
-      (error "Invalid command for creating cscope.files"))
+      (user-error "Invalid command for creating cscope.files"))
     (format cmd basedir)))
 
 (defun cxrefs-cscope-build-db (ctx)
@@ -507,6 +507,9 @@ string as shell pattern matching."
     (cxrefs-context-del ctx)))
 
 (defvar cxrefs-no-context-error "No associated context for cxrefs")
+(defvar cxrefs-no-marker-error "No %s locations for cxrefs")
+(defvar cxrefs-no-buffer-error "The marked buffer has been deleted")
+(defvar cxrefs-no-select-buffer-error "No %s select buffer")
 
 ;; Marker history interface
 (defun cxrefs-marker-go-next ()
@@ -514,12 +517,12 @@ string as shell pattern matching."
   (interactive)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
-	(error cxrefs-no-context-error)
+	(user-error cxrefs-no-context-error)
       (let ((marker (cxrefs-history-go-next (cxrefs-ctx-marker-get ctx))))
 	(unless marker
-	  (error "No forward locations for cxrefs"))
+	  (user-error cxrefs-no-marker-error "next"))
 	(switch-to-buffer (or (marker-buffer marker)
-			      (error "The marked buffer has been deleted")))
+			      (user-error cxrefs-no-buffer-error)))
 	(goto-char (marker-position marker))))))
 
 (defun cxrefs-marker-go-prev ()
@@ -527,7 +530,7 @@ string as shell pattern matching."
   (interactive)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
-	(error cxrefs-no-context-error)
+	(user-error cxrefs-no-context-error)
       (let ((history (cxrefs-ctx-marker-get ctx)))
 	;; if this is top, replace it with current point
 	(when (cxrefs-history-pos-top-p history)
@@ -536,9 +539,9 @@ string as shell pattern matching."
 	;; go back previous marker
 	(let ((marker (cxrefs-history-go-prev history)))
 	  (unless marker
-	    (error "No previous locations for cxrefs"))
+	    (user-error cxrefs-no-marker-error "previous"))
 	  (switch-to-buffer (or (marker-buffer marker)
-				(error "The marked buffer has been deleted")))
+				(user-error cxrefs-no-buffer-error)))
 	  (goto-char (marker-position marker)))))))
 
 ;; Select buffer history interface
@@ -547,10 +550,10 @@ string as shell pattern matching."
   (interactive)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
-	(error cxrefs-no-context-error)
+	(user-error cxrefs-no-context-error)
       (let ((next (cxrefs-history-go-next (cxrefs-ctx-selbuf-get ctx))))
 	(if (not (bufferp next))
-	    (error "No next select buffer"))
+	    (user-error cxrefs-no-select-buffer-error "next"))
 	(switch-to-buffer next)))))
 
 (defun cxrefs-selbuf-go-prev ()
@@ -558,10 +561,10 @@ string as shell pattern matching."
   (interactive)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
-	(error cxrefs-no-context-error)
+	(user-error cxrefs-no-context-error)
       (let ((prev (cxrefs-history-go-prev (cxrefs-ctx-selbuf-get ctx))))
 	(if (not (bufferp prev))
-	    (error "No previous select buffer"))
+	    (user-error cxrefs-no-select-buffer-error "previous"))
 	(switch-to-buffer prev)))))
 
 ;; Hooks
@@ -786,7 +789,8 @@ string as shell pattern matching."
   "Toggle ignore/use letter case."
   (interactive)
   (let ((ctx (cxrefs-context-current)))
-    (when ctx
+    (if (not ctx)
+	(user-error cxrefs-no-context-error)
       (cxrefs-backend-command ctx 'toggle-case)
       (message "Toggle case cxrefs"))))
 
@@ -794,9 +798,10 @@ string as shell pattern matching."
   "Rebuild cross reference database."
   (interactive)
   (let ((ctx (cxrefs-context-current)))
-    (when ctx
-      (cxrefs-backend-command ctx 'rebuild)))
-  (message "Rebuild cxrefs"))
+    (if (not ctx)
+	(user-error cxrefs-no-context-error)
+      (cxrefs-backend-command ctx 'rebuild)
+      (message "Rebuild cxrefs"))))
 
 (defun cxrefs-quit ()
   "Quit backend and context."
@@ -827,10 +832,10 @@ string as shell pattern matching."
   (interactive)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
-	(error "Cxrefs no associated context")
+	(user-error cxrefs-no-context-error)
       (let ((buffer (cxrefs-selbuf-current (cxrefs-ctx-selbuf-get ctx))))
 	(if (not (bufferp buffer))
-	    (error "Cxrefs no select buffer")
+	    (user-error cxrefs-no-select-buffer-error "associated")
 	  (cxrefs-ctx-window-config-set ctx (current-window-configuration))
 	  (pop-to-buffer buffer t)))
       (cxrefs-select-next-line)
