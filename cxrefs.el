@@ -977,8 +977,8 @@ with no args, if that value is non-nil.
   `((,cxrefs-select-output-basedir (1 'font-lock-keyword-face))
     (,cxrefs-select-output-backend (1 'font-lock-string-face))
     ("^Find\\[.+?\\]: \\(.*\\)$" (1 'font-lock-string-face))
-    ("^Exclude: \\(.*\\)$" (1 'font-lock-string-face))
-    ("^Include: \\(.*\\)$" (1 'font-lock-string-face))
+    ("^Exclude\\[.+?\\]: \\(.*\\)$" (1 'font-lock-string-face))
+    ("^Include\\[.+?\\]: \\(.*\\)$" (1 'font-lock-string-face))
     (,cxrefs-output-line-regexp
      (,cxrefs-output-func-place 'font-lock-function-name-face)
      (,cxrefs-output-file-place 'font-lock-keyword-face)
