@@ -910,6 +910,51 @@ with no args, if that value is non-nil.
   (re-search-backward cxrefs-output-line-regexp nil t count)
   (beginning-of-line))
 
+(defun cxrefs-depth-info ()
+  (let* ((line (buffer-substring (line-beginning-position) (line-end-position)))
+	 (match (string-match "\\`\\(\\( *\\)\\(<-\\|->\\)\\) " line))
+	 (prefix (and match (match-string 1 line)))
+	 (depth (and match (length (match-string 2 line))))
+	 (arrow (and match (match-string 3 line))))
+    (when match
+      (list prefix depth arrow))))
+
+(defun cxrefs-select-depth-next-line (&optional count)
+  "Cxrefs select mode next line on same depth and hierarchy."
+  (interactive)
+  (let ((info (cxrefs-depth-info)))
+    (when info
+      (end-of-line)
+      (let* ((prefix (nth 0 info))
+	     (depth (nth 1 info))
+	     (arrow (nth 2 info))
+	     (limit (if (= depth 0)
+			nil
+		      (save-excursion
+			;; Find end of this hierarchy
+			(let ((re (format "^ \\{,%d\\}%s " (1- depth) arrow)))
+			  (re-search-forward re nil t))))))
+	(re-search-forward (concat "^" prefix) limit t count))
+      (beginning-of-line))))
+
+(defun cxrefs-select-depth-previous-line (&optional count)
+  "Cxrefs select mode previous line on same depth and hierarchy."
+  (interactive)
+  (let ((info (cxrefs-depth-info)))
+    (when info
+      (beginning-of-line)
+      (let* ((prefix (nth 0 info))
+	     (depth (nth 1 info))
+	     (arrow (nth 2 info))
+	     (limit (if (= depth 0)
+			nil
+		      (save-excursion
+			;; Find end of this hierarchy
+			(let ((re (format "^ \\{,%d\\}%s " (1- depth) arrow)))
+			  (re-search-backward re nil t))))))
+	(re-search-backward (concat "^" prefix) limit t count))
+      (beginning-of-line))))
+
 (defun cxrefs-file-not-found ()
   (if cxrefs-file-not-found-hook
       (run-hooks 'cxrefs-file-not-found-hook)
@@ -994,6 +1039,8 @@ with no args, if that value is non-nil.
     (define-key map "\M-p"	'cxrefs-selbuf-go-prev)
     (define-key map "n"		'cxrefs-select-next-line)
     (define-key map "p"		'cxrefs-select-previous-line)
+    (define-key map "N"		'cxrefs-select-depth-next-line)
+    (define-key map "P"		'cxrefs-select-depth-previous-line)
     (define-key map "."		'cxrefs-find-definition)
     (define-key map "c"		'cxrefs-find-symbol)
     (define-key map "v"		'cxrefs-find-callee)
