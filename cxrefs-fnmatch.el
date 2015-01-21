@@ -1,9 +1,9 @@
-;;; cxrefs-glob.el --- Convert glob to regexp  -*- lexical-binding: t; -*-
+;;; cxrefs-fnmatch.el --- Convert pattern to regexp  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2015  OGAWA Hirofumi
 
 ;; Author: OGAWA Hirofumi <hirofumi@mail.parknet.co.jp>
-;; Keywords: files
+;; Keywords: files, matching
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -20,7 +20,13 @@
 
 ;;; Commentary:
 
+;; Example usage:
 ;;
+;; (let ((regexp (cxrefs-wildcard-to-regexp "fs/**/[a-z]??*.c")))
+;;   (string-match regexp str))
+;; 
+;; (let ((regexp (cxrefs-pattern-to-regexp "{fs,mm}/*.c")))
+;;   (string-match regexp str))
 
 ;;; Code:
 
@@ -93,35 +99,38 @@
   "Given a shell file name pattern WILDCARD, return an equivalent regexp.
 The generated regexp will match a filename only if the filename
 matches that wildcard according to shell rules."
-  (if (null wildcard)
-      nil
-    (concat "\\`" (cxrefs--wildcard-to-regexp wildcard) "\\'")))
+  (save-match-data
+    (if (null wildcard)
+	nil
+      (concat "\\`" (cxrefs--wildcard-to-regexp wildcard) "\\'"))))
 
 (defun cxrefs-pattern-to-regexp (wildcard)
   "Similar with `cxrefs-wildcard-to-regexp'. But this supports brace expansion
 in WILDCARD."
-  ;; Brace expansion
-  ;; TODO: nested brace is not implemented
-  ;; {foo,bar} => \(foo\|bar\)
-  (if (null wildcard)
-      nil
-    (let ((i 0)
-	  (result nil))
-      (while (string-match "{\\([^},]+\\(,[^},]+\\)+\\)}" wildcard i)
-	(let ((pre (substring wildcard i (match-beginning 0))))
-	  (setq i (match-end 0))
-	  ;; {..,..,..} => \(..\|..\|..\)
-	  (setq result
-		(concat (cxrefs--wildcard-to-regexp pre)
-			"\\("
-			(let ((str-in-brace (match-string 1 wildcard)))
-			  (mapconcat 'cxrefs--wildcard-to-regexp
-				     (split-string str-in-brace ",")
-				     "\\|"))
-			"\\)"))))
-      (setq result (concat result
-			   (cxrefs--wildcard-to-regexp (substring wildcard i))))
-      (concat "\\`" result "\\'"))))
+  (save-match-data
+    ;; Brace expansion
+    ;; TODO: nested brace is not implemented
+    ;; {foo,bar} => \(foo\|bar\)
+    (if (null wildcard)
+	nil
+      (let ((i 0)
+	    (result nil))
+	(while (string-match "{\\([^},]+\\(,[^},]+\\)+\\)}" wildcard i)
+	  (let ((pre (substring wildcard i (match-beginning 0))))
+	    (setq i (match-end 0))
+	    ;; {..,..,..} => \(..\|..\|..\)
+	    (setq result
+		  (concat (cxrefs--wildcard-to-regexp pre)
+			  "\\("
+			  (let ((str-in-brace (match-string 1 wildcard)))
+			    (mapconcat 'cxrefs--wildcard-to-regexp
+				       (split-string str-in-brace ",")
+				       "\\|"))
+			  "\\)"))))
+	(setq result 
+	      (concat result
+		      (cxrefs--wildcard-to-regexp (substring wildcard i))))
+	(concat "\\`" result "\\'")))))
 
-(provide 'cxrefs-glob)
-;;; cxrefs-glob.el ends here
+(provide 'cxrefs-fnmatch)
+;;; cxrefs-fnmatch.el ends here

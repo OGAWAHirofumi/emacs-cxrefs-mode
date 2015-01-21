@@ -28,7 +28,7 @@
 
 (require 'ring)
 (require 'thingatpt)
-(require 'cxrefs-glob)
+(require 'cxrefs-fnmatch)
 
 (defgroup cxrefs-cscope nil
   "Cxrefs cscope backend."
