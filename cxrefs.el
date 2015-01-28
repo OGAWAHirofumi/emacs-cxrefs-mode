@@ -109,7 +109,7 @@
       (cxrefs-cscope-wait-prompt process)
       (goto-char (point-min))
       (while (re-search-forward
-	      "^\\(.+?\\) \\(\\S-+?\\) \\([0-9]+?\\) \\(.*\\)" nil t)
+	      "^\\(.+?\\) \\([^ \t]+?\\) \\([0-9]+?\\) \\(.*\\)" nil t)
 	(let ((file (match-string 1))
 	      (func (match-string 2))
 	      (line (match-string 3))
@@ -887,14 +887,16 @@ with no args, if that value is non-nil.
 (defvar cxrefs-select-output-backend
   "^Backend: \\(.*\\)$")
 (defvar cxrefs-output-line-regexp
-  "^\\s-*\\(->\\|<-\\)?\\s-*\\(.+?\\)\\s-+\\(\\S-+\\):\\([0-9]+\\)\\s-+\\(.*\\)"
+  "^\\( *\\(->\\|<-\\) \\)?\\(.+?\\) +\\(.+?\\):\\([0-9]+\\) +\\(.*\\)$"
   "This regular expression is used to recognize valid reference lines.")
-(defvar cxrefs-output-func-place 2
+(defvar cxrefs-output-func-place 3
   "Position number of `cxrefs-output-line-regexp' which locates function name.")
-(defvar cxrefs-output-file-place 3
+(defvar cxrefs-output-file-place 4
   "Position number of `cxrefs-output-line-regexp' which locates filename.")
-(defvar cxrefs-output-line-place 4
+(defvar cxrefs-output-line-place 5
   "Position number of `cxrefs-output-line-regexp' which locates line number.")
+(defvar cxrefs-output-hint-place 6
+  "Position number of `cxrefs-output-line-regexp' which locates hint string.")
 
 (defun cxrefs-select-next-line (&optional count)
   "Cxrefs select mode next line."
