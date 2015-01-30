@@ -232,6 +232,13 @@ string as shell pattern matching."
   "Length of select buffer history."
   :group 'cxrefs)
 
+(defcustom cxrefs-show-excluded-lines nil
+  "If non-nil, show excluded lines by filter. If nil, hidden."
+  :group 'cxrefs)
+
+(defvar cxrefs-excluded-line-sep "Excluded lines..."
+  "Separator line for matched and excluded match lines.")
+
 ;; FIXME: make this per context
 (defvar cxrefs-string-history nil
   "Default input string history list.")
@@ -355,7 +362,8 @@ string as shell pattern matching."
       (dolist (x xref)
 	(let ((info (if (plist-get x :exclude) exclude-info include-info)))
 	  (when (and (plist-get x :exclude) (not (plist-get info :marker)))
-	    (insert "\nExcluded lines...\n")
+	    (insert "\n")
+	    (insert cxrefs-excluded-line-sep "\n")
 	    (setq info (plist-put info :marker (point-marker))))
 	  ;; Adjust point to insert string
 	  (goto-char (plist-get info :marker))
@@ -1016,6 +1024,23 @@ with no args, if that value is non-nil.
   (interactive)
   (cxrefs-select-interpret-line t))
 
+(defun cxrefs-show-hide-excluded (show)
+  (if show
+      (widen)
+    (save-excursion
+      (goto-char (point-min))
+      (let* ((regexp (concat "^" cxrefs-excluded-line-sep "$"))
+	     (end (re-search-forward regexp nil t)))
+	(when end
+	  (narrow-to-region (point-min) end))))))
+
+(defun cxrefs-toggle-show-excluded ()
+  "Toggle show/hide excluded lines."
+  (interactive)
+  (let ((show (buffer-narrowed-p)))
+    (cxrefs-show-hide-excluded show)
+    (message "Cxrefs %s excluded lines" (if show "show" "hide"))))
+
 (defun cxrefs-select-quit ()
   "Quit select-mode, then restore window configuration."
   (interactive)
@@ -1081,6 +1106,7 @@ with no args, if that value is non-nil.
     (define-key map "\C-m"	'cxrefs-select-interpret-line)
     (define-key map [return]	'cxrefs-select-interpret-line)
     (define-key map " "		'cxrefs-select-preview)
+    (define-key map "\C-t"	'cxrefs-toggle-show-excluded)
     (define-key map "q"		'cxrefs-select-quit)
     map)
   "Keymap used in Cxrefs select mode.")
@@ -1102,6 +1128,7 @@ Turning on Cxrefs-Select mode calls the value of the variable
   (setq buffer-read-only t)
   (setq truncate-lines t)
   (cxrefs-select-read-context)
+  (cxrefs-show-hide-excluded cxrefs-show-excluded-lines)
   (goto-char (point-min))
   (cxrefs-select-next-line)
   (run-hooks 'cxrefs-select-mode-hook))
