@@ -315,34 +315,55 @@ string as shell pattern matching."
       (concat basedir file))))
 
 (defun cxrefs-xref-output (buffer ctx cmd-type string filter xref)
-  (let ((func-max (apply 'max cxrefs-min-function-width
-			 (mapcar (lambda (x) (plist-get x :func-len)) xref)))
-	(loc-max (apply 'max cxrefs-min-location-width
-			(mapcar (lambda (x) (plist-get x :loc-len)) xref))))
+  (let ((exclude-info (list :func-len cxrefs-min-function-width
+			    :loc-len cxrefs-min-location-width
+			    :filter (nth 0 filter)))
+	(include-info (list :func-len cxrefs-min-function-width
+			    :loc-len cxrefs-min-location-width
+			    :filter (nth 1 filter))))
+    ;; Calculate maximum length for :func-len and :loc-len
+    (dolist (x xref)
+      (let ((info (if (plist-get x :exclude) exclude-info include-info)))
+	(dolist (prop (list :func-len :loc-len))
+	  (let ((maxlen (max (plist-get info prop) (plist-get x prop))))
+	    (setq info (plist-put info prop maxlen))))))
+    ;; Make format string
+    (dolist (info (list exclude-info include-info))
+      (let ((func-len-str (number-to-string (plist-get info :func-len)))
+	    (loc-len-str (number-to-string (plist-get info :loc-len))))
+	(setq info (plist-put info :format-str
+			      (concat "%-" func-len-str "s"
+				      " %-" loc-len-str "s"
+				      " %s\n")))))
+    ;; Start output
     (with-current-buffer buffer
-      (let ((loc-width (number-to-string loc-max))
-	    (func-width (number-to-string func-max))
-	    (exclude (nth 0 filter))
-	    (include (nth 1 filter)))
-	;; Insert headers
-	(insert "-*- mode: cxrefs-select -*-\n")
-	(insert (format "Dir: %s\n" (cxrefs-ctx-dir-get ctx)))
-	(insert (format "Backend: %s\n" (cxrefs-ctx-backend ctx)))
-	(insert (format "Find[%s]: %s\n" cmd-type string))
-	(when exclude
-	  (insert (format "Exclude[%s]: %s\n"
-			  (if cxrefs-use-filter-regexp "regexp" "pattern")
-			  exclude)))
-	(when include
-	  (insert (format "Include[%s]: %s\n"
-			  (if cxrefs-use-filter-regexp "regexp" "pattern")
-			  include)))
-	(insert "\n")
-	(dolist (x xref)
+      ;; Insert headers
+      (insert "-*- mode: cxrefs-select -*-\n")
+      (insert (format "Dir: %s\n" (cxrefs-ctx-dir-get ctx)))
+      (insert (format "Backend: %s\n" (cxrefs-ctx-backend ctx)))
+      (insert (format "Find[%s]: %s\n" cmd-type string))
+      (when (plist-get exclude-info :filter)
+	(insert (format "Exclude[%s]: %s\n"
+			(if cxrefs-use-filter-regexp "regexp" "pattern")
+			(plist-get exclude-info :filter))))
+      (when (plist-get include-info :filter)
+	(insert (format "Include[%s]: %s\n"
+			(if cxrefs-use-filter-regexp "regexp" "pattern")
+			(plist-get include-info :filter))))
+      (insert "\n")
+      (setq include-info (plist-put include-info :marker (point-marker)))
+      (dolist (x xref)
+	(let ((info (if (plist-get x :exclude) exclude-info include-info)))
+	  (when (and (plist-get x :exclude) (not (plist-get info :marker)))
+	    (insert "\nExcluded lines...\n")
+	    (setq info (plist-put info :marker (point-marker))))
+	  ;; Adjust point to insert string
+	  (goto-char (plist-get info :marker))
 	  ;; Insert xrefs
-	  (insert (format (concat "%-" func-width "s %-" loc-width "s %s\n")
-			  (plist-get x :func) (plist-get x :location)
-			  (plist-get x :hint))))))
+	  (insert-before-markers
+	   (format (plist-get info :format-str) 
+		   (plist-get x :func) (plist-get x :location)
+		   (plist-get x :hint))))))
     ))
 
 ;; History management helpers
@@ -609,30 +630,29 @@ string as shell pattern matching."
     (cxrefs-context-make cxrefs-basedir))
   (cxrefs-check-and-build-db))
 
-;; Filter out if matches exclude regexp, but not matches include regexp
-(defun cxrefs-xref-filter (filter xref)
+;; Mark if matches exclude regexp, but not matches include regexp
+(defun cxrefs-xref-mark-exclude (filter xref)
   (let ((exclude (nth 0 filter))
 	(include (nth 1 filter)))
     (if (not exclude)
 	xref
-      (delq nil
-	    (mapcar (lambda (x)
-		      (let* ((file (plist-get x :file))
-			     (force (and include (string-match include file))))
-			(if (and (not force) (string-match exclude file))
-			    nil
-			  x)))
-		    xref)))))
+      (mapcar (lambda (x)
+		(let* ((file (plist-get x :file)))
+		  (if (and (not (and include (string-match include file)))
+			   (string-match exclude file))
+		      (plist-put x :exclude t)
+		    x)))
+	      xref))))
 
-(defun cxrefs-backend-command-with-filter (ctx cmd-type string filter)
-  (cxrefs-xref-filter filter
-		      (cxrefs-backend-command ctx cmd-type string)))
+(defun cxrefs-backend-command-with-mark (ctx cmd-type string filter)
+  (cxrefs-xref-mark-exclude filter
+			    (cxrefs-backend-command ctx cmd-type string)))
 
 ;; Make hierarchy by reverse order
 (defun cxrefs-xref-hierarchy2 (ctx cmd-type func whole depth max-depth
 				   arrow filter)
   (let ((prefix (format "%s%s" (make-string depth ? ) arrow))
-	(xref (cxrefs-backend-command-with-filter ctx cmd-type func filter)))
+	(xref (cxrefs-backend-command-with-mark ctx cmd-type func filter)))
     (dolist (x xref whole)
       (let ((next-func (plist-get x :func)))
 	;; Add hierarchy annotation to function
@@ -641,7 +661,7 @@ string as shell pattern matching."
 	  (setq x (plist-put x :func-len (length prefix-func))))
 	;; Make whole list by reverse order
 	(push (plist-put x :depth depth) whole)
-	(when (< depth max-depth)
+	(when (and (< depth max-depth) (not (plist-get x :exclude)))
 	  (setq whole (cxrefs-xref-hierarchy2 ctx cmd-type next-func whole
 					      (1+ depth) max-depth
 					      arrow filter)))))
@@ -663,7 +683,7 @@ string as shell pattern matching."
    ((or (eq cmd-type 'caller-hierarchy) (eq cmd-type 'callee-hierarchy))
     (cxrefs-xref-hierarchy ctx cmd-type string filter args))
    (t
-    (cxrefs-backend-command-with-filter ctx cmd-type string filter))))
+    (cxrefs-backend-command-with-mark ctx cmd-type string filter))))
 
 (defun cxrefs-show-xref-select (cmd-type string filter &rest args)
   (cxrefs-check-tags-table)
