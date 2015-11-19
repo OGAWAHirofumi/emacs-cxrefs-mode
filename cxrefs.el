@@ -209,6 +209,12 @@
   "Default backend."
   :group 'cxrefs)
 
+(defcustom cxrefs-post-jump-hook '(recenter
+				   cxrefs-highlight-position)
+  "Hook after jumping to target position.
+This hook is called with current window/buffer/position on target."
+  :group 'cxrefs)
+
 (defcustom cxrefs-hierarchy-depth 4
   "Default depth for function hierarchy."
   :group 'cxrefs)
@@ -552,7 +558,8 @@ string as shell pattern matching."
 	  (user-error cxrefs-no-marker-error "next"))
 	(switch-to-buffer (or (marker-buffer marker)
 			      (user-error cxrefs-no-buffer-error)))
-	(goto-char (marker-position marker))))))
+	(goto-char (marker-position marker))
+	(run-hooks 'cxrefs-post-jump-hook)))))
 
 (defun cxrefs-marker-go-prev ()
   "Go previous to where point was last invoked."
@@ -571,7 +578,8 @@ string as shell pattern matching."
 	    (user-error cxrefs-no-marker-error "previous"))
 	  (switch-to-buffer (or (marker-buffer marker)
 				(user-error cxrefs-no-buffer-error)))
-	  (goto-char (marker-position marker)))))))
+	  (goto-char (marker-position marker))
+	  (run-hooks 'cxrefs-post-jump-hook))))))
 
 ;; Select buffer history interface
 (defun cxrefs-selbuf-go-next ()
@@ -600,7 +608,6 @@ string as shell pattern matching."
 (defvar cxrefs-show-xref-select-hook nil)
 (defvar cxrefs-back-and-next-select-hook nil)
 (defvar cxrefs-file-not-found-hook nil)
-(defvar cxrefs-select-interpret-line-hook nil)
 (defvar cxrefs-select-mode-hook nil)
 
 (defun cxrefs-ask-basedir ()
@@ -1002,7 +1009,8 @@ with no args, if that value is non-nil.
 	  (func (match-string cxrefs-output-func-place))
 	  (file (match-string cxrefs-output-file-place))
 	  (line (match-string cxrefs-output-line-place))
-	  (find-file-not-found-functions (list 'cxrefs-file-not-found)))
+	  (find-file-not-found-functions (list 'cxrefs-file-not-found))
+	  window)
       (find-file-other-window (cxrefs-expand-file-name ctx file))
       ;; Inherit cxrefs-basedir
       (setq cxrefs-basedir (cxrefs-ctx-dir-get ctx))
@@ -1013,11 +1021,13 @@ with no args, if that value is non-nil.
       ;; Change point to target line
       (goto-char (point-min))
       (forward-line (1- (string-to-number line)))
+      (setq window (selected-window))
       (message "Cxrefs Function: %s" func)
       (if preview
 	  (select-window select-mode-window)
 	(delete-other-windows))
-      (run-hooks 'cxrefs-select-interpret-line-hook))))
+      (with-selected-window window
+	(run-hooks 'cxrefs-post-jump-hook)))))
 
 (defun cxrefs-select-preview ()
   "Call `cxrefs-select-interpret-line' without selecting other window."
@@ -1132,6 +1142,11 @@ Turning on Cxrefs-Select mode calls the value of the variable
   (goto-char (point-min))
   (cxrefs-select-next-line)
   (run-hooks 'cxrefs-select-mode-hook))
+
+;;; Hooks
+(defun cxrefs-highlight-position ()
+  (when (fboundp 'pulse-momentary-highlight-one-line)
+    (pulse-momentary-highlight-one-line (point) 'next-error)))
 
 (provide 'cxrefs)
 ;;; cxrefs.el ends here
