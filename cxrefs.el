@@ -878,10 +878,15 @@ string as shell pattern matching."
 
 (defvar cxrefs-mode-map
   (let ((map (make-sparse-keymap)))
+    ;; for xref and old etags
+    (define-key map "\M-*"	'cxrefs-marker-go-prev)
+    (define-key map "\M-,"	'cxrefs-marker-go-prev)
+    (define-key map "\M-."	'cxrefs-find-definition)
+;    (define-key map "\C-\M-."	'cxrefs-find-symbol)
+    (define-key map "\M-?"	'cxrefs-find-caller)
+    ;; cxrefs key binds
     (define-key map "\M-N"	'cxrefs-marker-go-next)
     (define-key map "\M-P"	'cxrefs-marker-go-prev)
-    (define-key map "\M-*"	'cxrefs-marker-go-prev)
-    (define-key map "\M-."	'cxrefs-find-definition)
     (define-key map "\C-cc"	'cxrefs-find-symbol)
     (define-key map "\C-cv"	'cxrefs-find-callee)
     (define-key map "\C-c^"	'cxrefs-find-caller)
@@ -1092,13 +1097,15 @@ with no args, if that value is non-nil.
 (defvar cxrefs-select-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map cxrefs-mode-map)
+    ;; for xref and old etags
+    (define-key map "."		'cxrefs-find-definition)
+    ;; cxrefs key binds
     (define-key map "\M-n"	'cxrefs-selbuf-go-next)
     (define-key map "\M-p"	'cxrefs-selbuf-go-prev)
     (define-key map "n"		'cxrefs-select-next-line)
     (define-key map "p"		'cxrefs-select-previous-line)
     (define-key map "N"		'cxrefs-select-depth-next-line)
     (define-key map "P"		'cxrefs-select-depth-previous-line)
-    (define-key map "."		'cxrefs-find-definition)
     (define-key map "c"		'cxrefs-find-symbol)
     (define-key map "v"		'cxrefs-find-callee)
     (define-key map "^"		'cxrefs-find-caller)
