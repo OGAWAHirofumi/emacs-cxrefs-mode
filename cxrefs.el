@@ -224,6 +224,12 @@ This hook is called with current window/buffer/position on target."
 string as shell pattern matching."
   :group 'cxrefs)
 
+(defcustom cxrefs-fuzzy-target-lines 100
+  "If non-nil, search target line from tag hint for this lines range.
+With this, even if slightly out of dated tag works."
+  :type 'integer
+  :group 'cxrefs)
+
 (defcustom cxrefs-min-location-width 10
   "Minimum width to show filename:line."
   :group 'cxrefs)
@@ -1003,6 +1009,48 @@ with no args, if that value is non-nil.
     (kill-buffer (get-file-buffer (buffer-file-name)))
     (error "Cxrefs can't find file %s" (buffer-file-name))))
 
+;; FIXME: cscope removes some whitespaces from hint. So it may not
+;; match to target line even if no change actually.
+(defun cxrefs-goto-target-line (line hint)
+  (goto-char (point-min))
+  (forward-line (1- line))
+  (when (and (< 0 cxrefs-fuzzy-target-lines)
+	     (stringp hint)
+	     (not (string-match-p "^\\s-*$" hint))
+	     ;; ignore too short hint
+	     (> (length hint) 2))
+    ;; Fuzzy match target line slightly out of dated
+    (let ((startpos (point))
+	  (re (regexp-quote hint))
+	  ;; To accept small change, ignore whitespace changes.
+	  ;; FIXME: is there better way?
+	  (search-spaces-regexp "\\s-+")
+	  (case-fold-search nil))
+      ;; FIXME: usually a user would want to skip comment lines
+      (when (not (looking-at-p (concat "\\s-*" re)))
+	(let (fpos bpos bound)
+	  ;; Backward search
+	  (goto-char startpos)
+	  (setq bound
+		(line-beginning-position (- (1- cxrefs-fuzzy-target-lines))))
+	  (setq bpos (re-search-backward re bound t))
+	  ;; Forward search
+	  (goto-char startpos)
+	  (setq bound
+		(line-beginning-position (1+ cxrefs-fuzzy-target-lines)))
+	  (setq fpos (re-search-forward re bound t))
+	  ;; Use near position from startpos
+	  (when (and bpos fpos (< (- startpos bpos) (- fpos startpos)))
+	    (setq fpos bpos))
+;	  (when (and (null fpos) (null bpos))
+;	    (message "Cxrefs: Hint not found. Maybe tag is out of date" hint))
+;	  (when (or fpos bpos)
+;	    (goto-char (or fpos bpos))
+;	    (message "Cxrefs: Adjust %s => %s"
+;		     startpos (line-beginning-position)))
+	  (goto-char (or fpos bpos startpos)))))
+    (beginning-of-line)))
+
 (defun cxrefs-select-interpret-line (&optional preview)
   "Parse the line under the cursor as a cxrefs output reference line."
   (interactive "P")
@@ -1014,6 +1062,7 @@ with no args, if that value is non-nil.
 	  (func (match-string cxrefs-output-func-place))
 	  (file (match-string cxrefs-output-file-place))
 	  (line (match-string cxrefs-output-line-place))
+	  (hint (match-string cxrefs-output-hint-place))
 	  (find-file-not-found-functions (list 'cxrefs-file-not-found))
 	  window)
       (find-file-other-window (cxrefs-expand-file-name ctx file))
@@ -1024,10 +1073,9 @@ with no args, if that value is non-nil.
 	  (cxrefs-selbuf-update-lru history)))
       (cxrefs-mode 1)
       ;; Change point to target line
-      (goto-char (point-min))
-      (forward-line (1- (string-to-number line)))
-      (setq window (selected-window))
       (message "Cxrefs Function: %s" func)
+      (cxrefs-goto-target-line (string-to-number line) hint)
+      (setq window (selected-window))
       (if preview
 	  (select-window select-mode-window)
 	(delete-other-windows))
