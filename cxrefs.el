@@ -30,182 +30,15 @@
 (require 'thingatpt)
 (require 'cxrefs-fnmatch)
 
-(defgroup cxrefs-cscope nil
-  "Cxrefs cscope backend."
-  :version "25.1"
-  :group 'cxrefs-cscope)
-
-(defcustom cxrefs-cscope-program "cscope"
-  "The name of the cscope executable."
-  :group 'cxrefs-cscope)
-
-(defcustom cxrefs-cscope-build-files-history
-  '("cscope-linux.pl"
-    "find -L . -name '*.[chlyS]' -o -name '*.cc' -o -name '*.cpp' > cscope.files"
-    "cscope-freebsd.pl"
-    "cscope-glibc.pl")
-  "*Command for creating cscope.file."
-  :group 'cxrefs-cscope)
-
-(defvar cxrefs-cscope-command-table
-  '((symbol		. "0") (define		. "1")
-    (callee		. "2") (caller		. "3")
-    (text		. "4") (grep		. "5")
-    (egrep		. "6") (file		. "7")
-    (includer		. "8") (assign		. "9")
-    (all		. "a") (toggle-case	. "c")
-    (rebuild		. nil) (quit		. nil)))
-
-(defun cxrefs-cscope-check-db (ctx)
-  (file-exists-p (concat (cxrefs-ctx-dir-get ctx) "cscope.out")))
-
-(defun cxrefs-cscope-wait-prompt (process)
-  (while (and (processp process) (eq (process-status process) 'run)
-	      (goto-char (point-min))
-	      (not (re-search-forward "^>> $" nil t)))
-    (accept-process-output process)))
-
-(defun cxrefs-cscope-init (ctx &optional option)
-  (let ((process-connection-type nil) ; use a pipe
-	(default-directory (cxrefs-ctx-dir-get ctx))
-	(program-args '("-l"))
-	(buffer (generate-new-buffer "*Cscope-Process*"))
-	process)
-    (buffer-disable-undo buffer)
-    (when (and (not (eq option 'rebuild)) (cxrefs-cscope-check-db ctx))
-      (push "-d" program-args))
-    (setq process (apply 'start-process "Cscope-Process" buffer
-			 cxrefs-cscope-program program-args))
-    (set-process-query-on-exit-flag process nil)
-    (with-current-buffer (process-buffer process)
-      (cxrefs-cscope-wait-prompt process))
-    process))
-
-(defun cxrefs-cscope-ask-files-command (basedir)
-  "Retrun a command for creating cscope.files."
-  ;; If we don't know the command yet, ask user.
-  (let ((cmd (read-string "Command for creating cscope.files: "
-			  (car cxrefs-cscope-build-files-history)
-			  '(cxrefs-cscope-build-files-history . 1))))
-    (when (string= cmd "")
-      (user-error "Invalid command for creating cscope.files"))
-    (format cmd basedir)))
-
-(defun cxrefs-cscope-build-db (ctx)
-  "Build cscope.files."
-  (let* ((basedir (cxrefs-ctx-dir-get ctx))
-	 (command (cxrefs-cscope-ask-files-command basedir))
-	 (default-directory basedir))
-    ;; Build cscope.files
-    (unless (= 0 (shell-command command))
-      (error "Couldn't create cscope.files"))))
-
-(defun cxrefs-cscope-make-xref (ctx command string)
-  (let ((process (cxrefs-ctx-process-get ctx))
-	xref)
-    (with-current-buffer (process-buffer process)
-      (erase-buffer)
-      (process-send-string process (concat command string "\n"))
-      (cxrefs-cscope-wait-prompt process)
-      (goto-char (point-min))
-      (while (re-search-forward
-	      "^\\(.+?\\) \\([^ \t]+?\\) \\([0-9]+?\\) \\(.*\\)" nil t)
-	(let ((file (match-string 1))
-	      (func (match-string 2))
-	      (line (match-string 3))
-	      (hint (match-string 4)))
-	  (push (cxrefs-xref-make ctx func file line hint) xref))))
-    (nreverse xref)))
-
-(defun cxrefs-cscope-command (ctx cmd-type &optional string)
-  (let ((cmd (cdr (assoc cmd-type cxrefs-cscope-command-table))))
-    (cond
-     ((stringp cmd)
-      (cxrefs-process-init ctx)
-      (cxrefs-cscope-make-xref ctx cmd string))
-     ((eq cmd-type 'rebuild)
-      ;; Quit if alive
-      (when (cxrefs-process-check ctx)
-	(cxrefs-cscope-make-xref ctx "q" ""))
-      ;; Then rebuild
-      (cxrefs-process-init ctx 'rebuild)
-      (cxrefs-cscope-make-xref ctx "r" ""))
-     ((eq cmd-type 'quit)
-      (let ((process (cxrefs-ctx-process-get ctx)))
-	(when (processp process)
-	  (cxrefs-cscope-make-xref ctx "q" "")
-	  (when (process-buffer process)
-	    (kill-buffer (process-buffer process)))))
-      (cxrefs-ctx-process-set ctx nil)))
-    ))
-
-(defvar cxrefs-backend-cscope '("cscope"
-				:init-fn cxrefs-cscope-init
-				:check-db-fn cxrefs-cscope-check-db
-				:build-db-fn cxrefs-cscope-build-db
-				:command-fn cxrefs-cscope-command))
-
-(defgroup cxrefs-gtags nil
-  "Cxrefs gtags backend."
-  :version "25.1"
-  :group 'cxrefs-gtags)
-
-(defcustom cxrefs-gtags-program "gtags-cscope"
-  "The name of the gtags executable."
-  :group 'cxrefs-gtags)
-
-(defcustom cxrefs-gtags-build-program "gtags"
-  "The name of the gtags executable to make database."
-  :group 'cxrefs-gtags)
-
-(defun cxrefs-gtags-check-db (ctx)
-  (file-exists-p (concat (cxrefs-ctx-dir-get ctx) "GTAGS")))
-
-(defun cxrefs-gtags-init (ctx &optional _option)
-  (let ((process-connection-type nil) ; use a pipe
-	(default-directory (cxrefs-ctx-dir-get ctx))
-	(buffer (generate-new-buffer "*Gtags-Process*"))
-	process)
-    (buffer-disable-undo buffer)
-    (setq process (start-process "Gtags-Process" buffer cxrefs-gtags-program))
-    (set-process-query-on-exit-flag process nil)
-    ;; Wait prompt
-    (accept-process-output process)
-    process))
-
-(defun cxrefs-gtags-build-db (ctx)
-  "Build GTAGS."
-  (let* ((basedir (cxrefs-ctx-dir-get ctx))
-	 (command cxrefs-gtags-build-program)
-	 (default-directory basedir))
-    ;; Build cscope.files
-    (unless (= 0 (shell-command command))
-      (error "Couldn't create cscope.files"))))
-
-(defun cxrefs-gtags-command (ctx cmd-type &optional string)
-  (if (not (eq cmd-type 'rebuild))
-      (cxrefs-cscope-command ctx cmd-type string)
-    ;; rebuild
-    (cxrefs-process-init ctx 'rebuild)
-    (cxrefs-cscope-make-xref ctx "r" "")))
-
-(defvar cxrefs-backend-gtags '("gtags"
-			       :init-fn cxrefs-gtags-init
-			       :check-db-fn cxrefs-gtags-check-db
-			       :build-db-fn cxrefs-gtags-build-db
-			       :command-fn cxrefs-gtags-command))
-
-(defvar cxrefs-backends
-  (list cxrefs-backend-cscope
-	cxrefs-backend-gtags)
-  "Cxrefs backend list.")
+(eval-when-compile
+  (require 'cl-lib))
 
 (defgroup cxrefs nil
   "Support for cross reference."
   :version "25.1"
   :group 'cxrefs)
 
-(defcustom cxrefs-backend-default "cscope"
+(defcustom cxrefs-backend-default 'cscope
   "Default backend."
   :group 'cxrefs)
 
@@ -263,33 +96,170 @@ With this, even if slightly out of dated tag works."
 (defvar cxrefs-include-history nil
   "Default include regexp/pattern history list.")
 
-(defun cxrefs-ctx-backend-set (ctx backend)
-  (setq ctx (plist-put ctx :backend backend)))
-(defun cxrefs-ctx-process-get (ctx)
-  (plist-get ctx :process))
-(defun cxrefs-ctx-process-set (ctx process)
-  (setq ctx (plist-put ctx :process process)))
-(defun cxrefs-ctx-dir-get (ctx)
-  (plist-get ctx :dir))
-(defun cxrefs-ctx-dir-set (ctx dir)
-  (setq ctx (plist-put ctx :dir dir)))
-(defun cxrefs-ctx-marker-get (ctx)
-  (plist-get ctx :marker))
-(defun cxrefs-ctx-marker-set (ctx history)
-  (setq ctx (plist-put ctx :marker history)))
-(defun cxrefs-ctx-selbuf-get (ctx)
-  (plist-get ctx :selbuf))
-(defun cxrefs-ctx-selbuf-set (ctx history)
-  (setq ctx (plist-put ctx :selbuf history)))
-(defun cxrefs-ctx-window-config-get (ctx)
-  (plist-get ctx :config))
-(defun cxrefs-ctx-window-config-set (ctx config)
-  (setq ctx (plist-put ctx :config config)))
+;; History management helpers
+(cl-defstruct (cxrefs-history
+	       (:constructor nil)
+	       (:copier nil)
+	       (:predicate nil)
+	       (:constructor cxrefs-history-make (length
+						  kill-fn
+						  &aux
+						  (ring (make-ring length)))))
+  length
+  (pos 0)
+  (kill-fn :read-only t)
+  (ring :read-only t))
 
-(defun cxrefs-ctx-backend (ctx)
-  (car (plist-get ctx :backend)))
+(defun cxrefs-history-pos-top-p (history)
+  (= 0 (cxrefs-history-pos history)))
+
+(defun cxrefs-history-reset (history)
+  "Remove all history."
+  ;; Clear out the history we are throwing away.
+  (let ((kill-fn (cxrefs-history-kill-fn history))
+	(ring (cxrefs-history-ring history)))
+    (while (not (ring-empty-p ring))
+      (let ((item (ring-remove ring 0)))
+	(when item
+	  (funcall kill-fn item)))))
+  (setf (cxrefs-history-pos history) 0))
+
+(defun cxrefs-history-pop (history)
+  "Remove newest history."
+  (let ((ring (cxrefs-history-ring history)))
+    (setf (cxrefs-history-pos history) 0)
+    (or (ring-empty-p ring) (ring-remove ring 0))))
+
+(defun cxrefs-history-push (history new)
+  "Add new history as newest history."
+  (let* ((ring (cxrefs-history-ring history))
+	 (kill-fn (cxrefs-history-kill-fn history))
+	 (full (>= (ring-length ring) (ring-size ring)))
+	 (old (and full (ring-remove ring nil))))
+    (when (and old kill-fn)
+      (funcall kill-fn old))
+    (setf (cxrefs-history-pos history) 0)
+    (ring-insert ring new)))
+
+(defun cxrefs-history-add (history new)
+  "Add new history and remove all forward histories."
+  (let ((ring (cxrefs-history-ring history))
+	(kill-fn (cxrefs-history-kill-fn history))
+	(pos (cxrefs-history-pos history)))
+    (when kill-fn
+      (while (> pos 0)
+	(let ((old (ring-remove ring 0)))
+	  (funcall kill-fn old))
+	(setq pos (1- pos))))
+    (cxrefs-history-push history new)))
+
+(defun cxrefs-history-update-lru (history)
+  "Remove current history and re-add it as newest history."
+  (let ((ring (cxrefs-history-ring history))
+	(pos (cxrefs-history-pos history)))
+    (setf (cxrefs-history-pos history) 0)
+    (when (not (ring-empty-p ring))
+      (ring-insert ring (ring-remove ring pos)))))
+
+(defun cxrefs-history-go-prev (history)
+  "Go previous history and return it."
+  (let ((ring (cxrefs-history-ring history))
+	(prev-pos (1+ (cxrefs-history-pos history))))
+    (if (> prev-pos (1- (ring-length ring)))
+	nil
+      (setf (cxrefs-history-pos history) prev-pos)
+      (ring-ref ring prev-pos))))
+
+(defun cxrefs-history-go-next (history)
+  "Go next history and return it."
+  (let ((ring (cxrefs-history-ring history))
+	(next-pos (1- (cxrefs-history-pos history))))
+    (if (< next-pos 0)
+	nil
+      (setf (cxrefs-history-pos history) next-pos)
+      (ring-ref ring next-pos))))
+
+(defun cxrefs-history-current (history)
+  "Retrun current history."
+  (let ((ring (cxrefs-history-ring history)))
+    (if (ring-empty-p ring)
+	nil
+      (ring-ref ring (cxrefs-history-pos history)))))
+
+;;; Marker history functions
+(defun cxrefs-marker-kill-fn (marker)
+  (set-marker marker nil))
+
+(defun cxrefs-marker-make ()
+  (cxrefs-history-make cxrefs-marker-length #'cxrefs-marker-kill-fn))
+
+(defun cxrefs-marker-reset (history)
+  ;; Clear out the markers we are throwing away.
+  (when history
+    (cxrefs-history-reset history)))
+
+(defun cxrefs-marker-push (history)
+  ;; if this is top, remove dummy entry
+  (when (cxrefs-history-pos-top-p history)
+    (cxrefs-history-pop history))
+  ;; save current point
+  (cxrefs-history-add history (point-marker))
+  ;; and add dummy marker
+  (cxrefs-history-add history nil))
+
+;; Select buffer history functions
+(defun cxrefs-selbuf-make ()
+  (cxrefs-history-make cxrefs-selbuf-length #'kill-buffer))
+
+(defun cxrefs-selbuf-reset (history)
+  ;; Clear out the markers we are throwing away.
+  (if history
+      (cxrefs-history-reset history)))
+
+(defun cxrefs-selbuf-push (history buffer)
+  (cxrefs-history-push history buffer))
+
+(defun cxrefs-selbuf-update-lru (history)
+  (cxrefs-history-update-lru history))
+
+(defun cxrefs-selbuf-current (history)
+  (cxrefs-history-current history))
+
+;;; Context helpers
+(cl-defstruct (cxrefs-ctx
+	       (:constructor nil)
+	       (:copier nil)
+	       (:predicate nil)
+	       (:constructor cxrefs-ctx-make (dir
+					      &aux
+					      (marker (cxrefs-marker-make))
+					      (selbuf (cxrefs-selbuf-make)))))
+  (dir :read-only t)
+  backend
+  process
+  (marker :read-only t)
+  (selbuf :read-only t)
+  window-config)
+
+(defmacro cxrefs-define-backend (sym)
+  (let* ((name (symbol-name sym))
+	 (init-fn (intern (concat "cxrefs-" name "-init")))
+	 (check-db-fn (intern (concat "cxrefs-" name "-check-db")))
+	 (build-db-fn (intern (concat "cxrefs-" name "-build-db")))
+	 (command-fn (intern (concat "cxrefs-" name "-command"))))
+    `(add-to-list 'cxrefs-backends
+		  (quote (,sym . (:init-fn ,init-fn
+					   :check-db-fn ,check-db-fn
+					   :build-db-fn ,build-db-fn
+					   :command-fn ,command-fn))))))
+
+(defvar cxrefs-backends nil
+  "Cxrefs backend list.")
+
+(defun cxrefs-ctx-backend-key (ctx)
+  (car (cxrefs-ctx-backend ctx)))
 (defun cxrefs-ctx-backend-fn (ctx sym)
-  (plist-get (cdr (plist-get ctx :backend)) sym))
+  (plist-get (cdr (cxrefs-ctx-backend ctx)) sym))
 (defun cxrefs-backend-init (ctx &optional option)
   (funcall (cxrefs-ctx-backend-fn ctx :init-fn) ctx option))
 (defun cxrefs-backend-check-db (ctx)
@@ -299,15 +269,15 @@ With this, even if slightly out of dated tag works."
 (defun cxrefs-backend-command (ctx cmd-type &optional string)
   (funcall (cxrefs-ctx-backend-fn ctx :command-fn) ctx cmd-type string))
 
-;; Helper for backend
 (defun cxrefs-process-check (ctx)
-  (let ((process (cxrefs-ctx-process-get ctx)))
+  (let ((process (cxrefs-ctx-process ctx)))
     (and (processp process) (process-live-p process))))
 
 (defun cxrefs-process-init (ctx &optional option)
   (unless (cxrefs-process-check ctx)
-    (cxrefs-ctx-process-set ctx (cxrefs-backend-init ctx option))))
+    (setf (cxrefs-ctx-process ctx) (cxrefs-backend-init ctx option))))
 
+;; Utility functions
 (defun cxrefs-xref-make (ctx func file line hint)
   (let* ((file (cxrefs-relative-file-name ctx file))
 	 (linenum (if (stringp line) (string-to-number line) line))
@@ -319,16 +289,15 @@ With this, even if slightly out of dated tag works."
 	  :file file :line linenum
 	  :hint hint)))
 
-;; Utility functions
 (defun cxrefs-relative-file-name (ctx file)
-  (let* ((basedir (cxrefs-ctx-dir-get ctx))
+  (let* ((basedir (cxrefs-ctx-dir ctx))
 	 (absolute (expand-file-name file basedir)))
     (if (string-prefix-p basedir absolute)
 	(file-relative-name absolute basedir)
       (identity absolute))))
 
 (defun cxrefs-expand-file-name (ctx file)
-  (let ((basedir (cxrefs-ctx-dir-get ctx)))
+  (let ((basedir (cxrefs-ctx-dir ctx)))
     (if (file-name-absolute-p file)
 	(identity file)
       (concat basedir file))))
@@ -343,7 +312,7 @@ With this, even if slightly out of dated tag works."
     ;; Calculate maximum length for :func-len and :loc-len
     (dolist (x xref)
       (let ((info (if (plist-get x :exclude) exclude-info include-info)))
-	(dolist (prop (list :func-len :loc-len))
+	(dolist (prop '(:func-len :loc-len))
 	  (let ((maxlen (max (plist-get info prop) (plist-get x prop))))
 	    (setq info (plist-put info prop maxlen))))))
     ;; Make format string
@@ -358,8 +327,8 @@ With this, even if slightly out of dated tag works."
     (with-current-buffer buffer
       ;; Insert headers
       (insert "-*- mode: cxrefs-select -*-\n")
-      (insert (format "Dir: %s\n" (cxrefs-ctx-dir-get ctx)))
-      (insert (format "Backend: %s\n" (cxrefs-ctx-backend ctx)))
+      (insert (format "Dir: %s\n" (cxrefs-ctx-dir ctx)))
+      (insert (format "Backend: %s\n" (cxrefs-ctx-backend-key ctx)))
       (insert (format "Find[%s]: %s\n" cmd-type string))
       (when (plist-get exclude-info :filter)
 	(insert (format "Exclude[%s]: %s\n"
@@ -381,153 +350,25 @@ With this, even if slightly out of dated tag works."
 	  (goto-char (plist-get info :marker))
 	  ;; Insert xrefs
 	  (insert-before-markers
-	   (format (plist-get info :format-str) 
+	   (format (plist-get info :format-str)
 		   (plist-get x :func) (plist-get x :location)
 		   (plist-get x :hint))))))
     ))
 
-;; History management helpers
-(defun cxrefs-history-make (hlen &optional kill-fn)
-  (list :pos 0 :kill-fn kill-fn :ring (make-ring hlen)))
-(defun cxrefs-history-kill-fn-get (history)
-  (plist-get history :kill-fn))
-(defun cxrefs-history-pos-get (history)
-  (plist-get history :pos))
-(defun cxrefs-history-pos-set (history pos)
-  (setq history (plist-put history :pos pos)))
-(defun cxrefs-history-ring-get (history)
-  (plist-get history :ring))
-
-(defun cxrefs-history-pos-top-p (history)
-  (= 0 (cxrefs-history-pos-get history)))
-
-(defun cxrefs-history-reset (history)
-  "Remove all history."
-  ;; Clear out the history we are throwing away.
-  (let ((kill-fn (cxrefs-history-kill-fn-get history))
-	(ring (cxrefs-history-ring-get history)))
-    (while (not (ring-empty-p ring))
-      (let ((item (ring-remove ring 0)))
-	(when item
-	  (funcall kill-fn item)))))
-  (cxrefs-history-pos-set history 0))
-
-(defun cxrefs-history-pop (history)
-  "Remove newest history."
-  (let ((ring (cxrefs-history-ring-get history)))
-    (cxrefs-history-pos-set history 0)
-    (or (ring-empty-p ring) (ring-remove ring 0))))
-
-(defun cxrefs-history-push (history new)
-  "Add new history as newest history."
-  (let* ((ring (cxrefs-history-ring-get history))
-	 (kill-fn (cxrefs-history-kill-fn-get history))
-	 (full (>= (ring-length ring) (ring-size ring)))
-	 (old (and full (ring-remove ring nil))))
-    (when (and old kill-fn)
-      (funcall kill-fn old))
-    (cxrefs-history-pos-set history 0)
-    (ring-insert ring new)))
-
-(defun cxrefs-history-add (history new)
-  "Add new history and remove all forward histories."
-  (let ((ring (cxrefs-history-ring-get history))
-	(kill-fn (cxrefs-history-kill-fn-get history))
-	(pos (cxrefs-history-pos-get history)))
-    (when kill-fn
-      (while (> pos 0)
-	(let ((old (ring-remove ring 0)))
-	  (funcall kill-fn old))
-	(setq pos (1- pos))))
-    (cxrefs-history-push history new)))
-
-(defun cxrefs-history-update-lru (history)
-  "Remove current history and re-add it as newest history."
-  (let ((ring (cxrefs-history-ring-get history))
-	(pos (cxrefs-history-pos-get history)))
-    (cxrefs-history-pos-set history 0)
-    (when (not (ring-empty-p ring))
-      (ring-insert ring (ring-remove ring pos)))))
-
-(defun cxrefs-history-go-prev (history)
-  "Go previous history and return it."
-  (let ((ring (cxrefs-history-ring-get history))
-	(prev-pos (1+ (cxrefs-history-pos-get history))))
-    (if (> prev-pos (1- (ring-length ring)))
-	nil
-      (cxrefs-history-pos-set history prev-pos)
-      (ring-ref ring prev-pos))))
-
-(defun cxrefs-history-go-next (history)
-  "Go next history and return it."
-  (let ((ring (cxrefs-history-ring-get history))
-	(next-pos (1- (cxrefs-history-pos-get history))))
-    (if (< next-pos 0)
-	nil
-      (cxrefs-history-pos-set history next-pos)
-      (ring-ref ring next-pos))))
-
-(defun cxrefs-history-current (history)
-  "Retrun current history."
-  (let ((ring (cxrefs-history-ring-get history)))
-    (if (ring-empty-p ring)
-	nil
-      (ring-ref ring (cxrefs-history-pos-get history)))))
-
-;;; Marker history functions
-(defun cxrefs-marker-kill-fn (marker)
-  (set-marker marker nil))
-
-(defun cxrefs-marker-make ()
-  (cxrefs-history-make cxrefs-marker-length 'cxrefs-marker-kill-fn))
-
-(defun cxrefs-marker-reset (history)
-  ;; Clear out the markers we are throwing away.
-  (when history
-    (cxrefs-history-reset history)))
-
-(defun cxrefs-marker-push (history)
-  ;; if this is top, remove dummy entry
-  (when (cxrefs-history-pos-top-p history)
-    (cxrefs-history-pop history))
-  ;; save current point
-  (cxrefs-history-add history (point-marker))
-  ;; and add dummy marker
-  (cxrefs-history-add history nil))
-
-;; Select buffer history functions
-(defun cxrefs-selbuf-make ()
-  (cxrefs-history-make cxrefs-selbuf-length 'kill-buffer))
-
-(defun cxrefs-selbuf-reset (history)
-  ;; Clear out the markers we are throwing away.
-  (if history
-      (cxrefs-history-reset history)))
-
-(defun cxrefs-selbuf-push (history buffer)
-  (cxrefs-history-push history buffer))
-
-(defun cxrefs-selbuf-update-lru (history)
-  (cxrefs-history-update-lru history))
-
-(defun cxrefs-selbuf-current (history)
-  (cxrefs-history-current history))
-
 ;; Cxrefs context management
 (defvar cxrefs-context-hash (make-hash-table :test 'equal :weakness nil))
-(defvar cxrefs-basedir nil)
-(make-variable-buffer-local 'cxrefs-basedir)
+(defvar-local cxrefs-basedir nil)
 
 (defun cxrefs-context-find (basedir)
   (gethash basedir cxrefs-context-hash))
 (defun cxrefs-context-add (ctx)
-  (puthash (cxrefs-ctx-dir-get ctx) ctx cxrefs-context-hash))
+  (puthash (cxrefs-ctx-dir ctx) ctx cxrefs-context-hash))
 (defun cxrefs-context-del (ctx)
-  (remhash (cxrefs-ctx-dir-get ctx) cxrefs-context-hash))
+  (remhash (cxrefs-ctx-dir ctx) cxrefs-context-hash))
 
 (defun cxrefs-basedir-list ()
   "Return the all cxrefs-basedir."
-  (maphash (lambda (_key ctx) (cxrefs-ctx-dir-get ctx)) cxrefs-context-hash))
+  (maphash (lambda (_key ctx) (cxrefs-ctx-dir ctx)) cxrefs-context-hash))
 
 (defun cxrefs-context-current ()
   "Retrun the current cxrefs context."
@@ -535,16 +376,13 @@ With this, even if slightly out of dated tag works."
 
 (defun cxrefs-context-make (basedir)
   "Initialize the cxrefs context with BASEDIR."
-  (let ((ctx (cxrefs-ctx-dir-set () basedir)))
-    (cxrefs-ctx-marker-set ctx (cxrefs-marker-make))
-    (cxrefs-ctx-selbuf-set ctx (cxrefs-selbuf-make))
-    (cxrefs-context-add ctx)))
+  (cxrefs-context-add (cxrefs-ctx-make basedir)))
 
 (defun cxrefs-context-delete (ctx)
   "Delete the cxrefs context associated with BASEDIR."
   (when ctx
-    (cxrefs-marker-reset (cxrefs-ctx-marker-get ctx))
-    (cxrefs-selbuf-reset (cxrefs-ctx-selbuf-get ctx))
+    (cxrefs-marker-reset (cxrefs-ctx-marker ctx))
+    (cxrefs-selbuf-reset (cxrefs-ctx-selbuf ctx))
     (cxrefs-context-del ctx)))
 
 (defvar cxrefs-no-context-error "No associated context for cxrefs")
@@ -559,7 +397,7 @@ With this, even if slightly out of dated tag works."
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
-      (let ((marker (cxrefs-history-go-next (cxrefs-ctx-marker-get ctx))))
+      (let ((marker (cxrefs-history-go-next (cxrefs-ctx-marker ctx))))
 	(unless marker
 	  (user-error cxrefs-no-marker-error "next"))
 	(switch-to-buffer (or (marker-buffer marker)
@@ -573,7 +411,7 @@ With this, even if slightly out of dated tag works."
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
-      (let ((history (cxrefs-ctx-marker-get ctx)))
+      (let ((history (cxrefs-ctx-marker ctx)))
 	;; if this is top, replace it with current point
 	(when (cxrefs-history-pos-top-p history)
 	  (cxrefs-history-pop history)
@@ -594,7 +432,7 @@ With this, even if slightly out of dated tag works."
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
-      (let ((next (cxrefs-history-go-next (cxrefs-ctx-selbuf-get ctx))))
+      (let ((next (cxrefs-history-go-next (cxrefs-ctx-selbuf ctx))))
 	(if (not (bufferp next))
 	    (user-error cxrefs-no-select-buffer-error "next"))
 	(switch-to-buffer next)))))
@@ -605,7 +443,7 @@ With this, even if slightly out of dated tag works."
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
-      (let ((prev (cxrefs-history-go-prev (cxrefs-ctx-selbuf-get ctx))))
+      (let ((prev (cxrefs-history-go-prev (cxrefs-ctx-selbuf ctx))))
 	(if (not (bufferp prev))
 	    (user-error cxrefs-no-select-buffer-error "previous"))
 	(switch-to-buffer prev)))))
@@ -629,7 +467,7 @@ With this, even if slightly out of dated tag works."
   (let (result)
     (dolist (backend cxrefs-backends result)
       (unless result
-	(cxrefs-ctx-backend-set ctx backend)
+	(setf (cxrefs-ctx-backend ctx) backend)
 	(when (cxrefs-backend-check-db ctx)
 	  (setq result backend))))
     (unless result
@@ -640,7 +478,7 @@ With this, even if slightly out of dated tag works."
 (defun cxrefs-check-and-build-db ()
   (let ((ctx (cxrefs-context-current)))
     (unless (cxrefs-ctx-backend ctx)
-      (cxrefs-ctx-backend-set ctx (cxrefs-select-backend ctx)))
+      (setf (cxrefs-ctx-backend ctx) (cxrefs-select-backend ctx)))
     (unless (cxrefs-backend-check-db ctx)
       (cxrefs-backend-build-db ctx))))
 
@@ -710,12 +548,12 @@ With this, even if slightly out of dated tag works."
   (cxrefs-check-tags-table)
   (let* ((ctx (cxrefs-context-current))
 	 (select-buffer-name (format "*Cxrefs (%s)*" string))
-	 (old-buffer (cxrefs-selbuf-current (cxrefs-ctx-selbuf-get ctx)))
+	 (old-buffer (cxrefs-selbuf-current (cxrefs-ctx-selbuf ctx)))
 	 (buffer (generate-new-buffer select-buffer-name)))
     (buffer-disable-undo buffer)
-    (cxrefs-ctx-window-config-set ctx (current-window-configuration))
-    (cxrefs-marker-push (cxrefs-ctx-marker-get ctx))
-    (cxrefs-selbuf-push (cxrefs-ctx-selbuf-get ctx) buffer)
+    (setf (cxrefs-ctx-window-config ctx) (current-window-configuration))
+    (cxrefs-marker-push (cxrefs-ctx-marker ctx))
+    (cxrefs-selbuf-push (cxrefs-ctx-selbuf ctx) buffer)
     (if (and (bufferp old-buffer) (get-buffer-window old-buffer))
 	;; if there is select-buffer, use it
 	(progn
@@ -823,7 +661,7 @@ With this, even if slightly out of dated tag works."
 (defun cxrefs-find-assign (string filter)
   "Find assignments to this symbol STRING."
   (interactive (list (cxrefs-read-string "Find assignments to this" 'symbol)
-		(and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'assign string filter))
 
 (defun cxrefs-toggle-case ()
@@ -874,10 +712,10 @@ With this, even if slightly out of dated tag works."
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
-      (let ((buffer (cxrefs-selbuf-current (cxrefs-ctx-selbuf-get ctx))))
+      (let ((buffer (cxrefs-selbuf-current (cxrefs-ctx-selbuf ctx))))
 	(if (not (bufferp buffer))
 	    (user-error cxrefs-no-select-buffer-error "associated")
-	  (cxrefs-ctx-window-config-set ctx (current-window-configuration))
+	  (setf (cxrefs-ctx-window-config ctx) (current-window-configuration))
 	  (pop-to-buffer buffer t)))
       (cxrefs-select-next-line)
       (run-hooks 'cxrefs-back-and-next-select-hook))))
@@ -1067,8 +905,8 @@ with no args, if that value is non-nil.
 	  window)
       (find-file-other-window (cxrefs-expand-file-name ctx file))
       ;; Inherit cxrefs-basedir
-      (setq cxrefs-basedir (cxrefs-ctx-dir-get ctx))
-      (let ((history (cxrefs-ctx-selbuf-get ctx)))
+      (setq cxrefs-basedir (cxrefs-ctx-dir ctx))
+      (let ((history (cxrefs-ctx-selbuf ctx)))
 	(when history
 	  (cxrefs-selbuf-update-lru history)))
       (cxrefs-mode 1)
@@ -1109,7 +947,7 @@ with no args, if that value is non-nil.
   (interactive)
   (let ((ctx (cxrefs-context-current)))
     (when ctx
-      (let ((config (cxrefs-ctx-window-config-get ctx)))
+      (let ((config (cxrefs-ctx-window-config ctx)))
 	(when (window-configuration-p config)
 	  (set-window-configuration config))))))
 
@@ -1120,12 +958,12 @@ with no args, if that value is non-nil.
   (setq cxrefs-basedir (match-string 1))
   ;; Set backend if need
   (re-search-forward cxrefs-select-output-backend nil nil)
-  (let ((backend (match-string 1)))
+  (let ((backend-sym (intern (match-string 1))))
     (when (not (cxrefs-context-current))
       (cxrefs-context-make cxrefs-basedir))
     (let ((ctx (cxrefs-context-current)))
       (when (not (cxrefs-ctx-backend ctx))
-	(cxrefs-ctx-backend-set ctx (assoc backend cxrefs-backends))))
+	(setf (cxrefs-ctx-backend ctx) (assoc backend-sym cxrefs-backends))))
     ))
 
 (defvar cxrefs-select-font-lock-keywords
@@ -1202,6 +1040,164 @@ Turning on Cxrefs-Select mode calls the value of the variable
 (defun cxrefs-highlight-position ()
   (when (fboundp 'pulse-momentary-highlight-one-line)
     (pulse-momentary-highlight-one-line (point) 'next-error)))
+
+;;; Backends
+(defgroup cxrefs-cscope nil
+  "Cxrefs cscope backend."
+  :version "25.1"
+  :group 'cxrefs-cscope)
+
+(defcustom cxrefs-cscope-program "cscope"
+  "The name of the cscope executable."
+  :group 'cxrefs-cscope)
+
+(defcustom cxrefs-cscope-build-files-history
+  '("cscope-linux.pl"
+    "find -L . -name '*.[chlyS]' -o -name '*.cc' -o -name '*.cpp' > cscope.files"
+    "cscope-freebsd.pl"
+    "cscope-glibc.pl")
+  "*Command for creating cscope.file."
+  :group 'cxrefs-cscope)
+
+(defvar cxrefs-cscope-command-table
+  '((symbol		. "0") (define		. "1")
+    (callee		. "2") (caller		. "3")
+    (text		. "4") (grep		. "5")
+    (egrep		. "6") (file		. "7")
+    (includer		. "8") (assign		. "9")
+    (all		. "a") (toggle-case	. "c")
+    (rebuild		. nil) (quit		. nil)))
+
+(defun cxrefs-cscope-check-db (ctx)
+  (file-exists-p (concat (cxrefs-ctx-dir ctx) "cscope.out")))
+
+(defun cxrefs-cscope-wait-prompt (process)
+  (while (and (processp process) (eq (process-status process) 'run)
+	      (goto-char (point-min))
+	      (not (re-search-forward "^>> $" nil t)))
+    (accept-process-output process)))
+
+(defun cxrefs-cscope-init (ctx &optional option)
+  (let ((process-connection-type nil) ; use a pipe
+	(default-directory (cxrefs-ctx-dir ctx))
+	(program-args '("-l"))
+	(buffer (generate-new-buffer "*Cscope-Process*"))
+	process)
+    (buffer-disable-undo buffer)
+    (when (and (not (eq option 'rebuild)) (cxrefs-cscope-check-db ctx))
+      (push "-d" program-args))
+    (setq process (apply 'start-process "Cscope-Process" buffer
+			 cxrefs-cscope-program program-args))
+    (set-process-query-on-exit-flag process nil)
+    (with-current-buffer (process-buffer process)
+      (cxrefs-cscope-wait-prompt process))
+    process))
+
+(defun cxrefs-cscope-ask-files-command (basedir)
+  "Retrun a command for creating cscope.files."
+  ;; If we don't know the command yet, ask user.
+  (let ((cmd (read-string "Command for creating cscope.files: "
+			  (car cxrefs-cscope-build-files-history)
+			  '(cxrefs-cscope-build-files-history . 1))))
+    (when (string= cmd "")
+      (user-error "Invalid command for creating cscope.files"))
+    (format cmd basedir)))
+
+(defun cxrefs-cscope-build-db (ctx)
+  "Build cscope.files."
+  (let* ((basedir (cxrefs-ctx-dir ctx))
+	 (command (cxrefs-cscope-ask-files-command basedir))
+	 (default-directory basedir))
+    ;; Build cscope.files
+    (unless (= 0 (shell-command command))
+      (error "Couldn't create cscope.files"))))
+
+(defun cxrefs-cscope-make-xref (ctx command string)
+  (let ((process (cxrefs-ctx-process ctx))
+	xref)
+    (with-current-buffer (process-buffer process)
+      (erase-buffer)
+      (process-send-string process (concat command string "\n"))
+      (cxrefs-cscope-wait-prompt process)
+      (goto-char (point-min))
+      (while (re-search-forward
+	      "^\\(.+?\\) \\([^ \t]+?\\) \\([0-9]+?\\) \\(.*\\)" nil t)
+	(let ((file (match-string 1))
+	      (func (match-string 2))
+	      (line (match-string 3))
+	      (hint (match-string 4)))
+	  (push (cxrefs-xref-make ctx func file line hint) xref))))
+    (nreverse xref)))
+
+(defun cxrefs-cscope-command (ctx cmd-type &optional string)
+  (let ((cmd (cdr (assoc cmd-type cxrefs-cscope-command-table))))
+    (cond
+     ((stringp cmd)
+      (cxrefs-process-init ctx)
+      (cxrefs-cscope-make-xref ctx cmd string))
+     ((eq cmd-type 'rebuild)
+      ;; Quit if alive
+      (when (cxrefs-process-check ctx)
+	(cxrefs-cscope-make-xref ctx "q" ""))
+      ;; Then rebuild
+      (cxrefs-process-init ctx 'rebuild)
+      (cxrefs-cscope-make-xref ctx "r" ""))
+     ((eq cmd-type 'quit)
+      (let ((process (cxrefs-ctx-process ctx)))
+	(when (processp process)
+	  (cxrefs-cscope-make-xref ctx "q" "")
+	  (when (process-buffer process)
+	    (kill-buffer (process-buffer process)))))
+      (setf (cxrefs-ctx-process ctx) nil)))
+    ))
+
+(cxrefs-define-backend cscope)
+
+(defgroup cxrefs-gtags nil
+  "Cxrefs gtags backend."
+  :version "25.1"
+  :group 'cxrefs-gtags)
+
+(defcustom cxrefs-gtags-program "gtags-cscope"
+  "The name of the gtags executable."
+  :group 'cxrefs-gtags)
+
+(defcustom cxrefs-gtags-build-program "gtags"
+  "The name of the gtags executable to make database."
+  :group 'cxrefs-gtags)
+
+(defun cxrefs-gtags-check-db (ctx)
+  (file-exists-p (concat (cxrefs-ctx-dir ctx) "GTAGS")))
+
+(defun cxrefs-gtags-init (ctx &optional _option)
+  (let ((process-connection-type nil) ; use a pipe
+	(default-directory (cxrefs-ctx-dir ctx))
+	(buffer (generate-new-buffer "*Gtags-Process*"))
+	process)
+    (buffer-disable-undo buffer)
+    (setq process (start-process "Gtags-Process" buffer cxrefs-gtags-program))
+    (set-process-query-on-exit-flag process nil)
+    ;; Wait prompt
+    (accept-process-output process)
+    process))
+
+(defun cxrefs-gtags-build-db (ctx)
+  "Build GTAGS."
+  (let* ((basedir (cxrefs-ctx-dir ctx))
+	 (command cxrefs-gtags-build-program)
+	 (default-directory basedir))
+    ;; Build cscope.files
+    (unless (= 0 (shell-command command))
+      (error "Couldn't create cscope.files"))))
+
+(defun cxrefs-gtags-command (ctx cmd-type &optional string)
+  (if (not (eq cmd-type 'rebuild))
+      (cxrefs-cscope-command ctx cmd-type string)
+    ;; rebuild
+    (cxrefs-process-init ctx 'rebuild)
+    (cxrefs-cscope-make-xref ctx "r" "")))
+
+(cxrefs-define-backend gtags)
 
 (provide 'cxrefs)
 ;;; cxrefs.el ends here
