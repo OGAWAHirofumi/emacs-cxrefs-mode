@@ -63,6 +63,12 @@ With this, even if slightly out of dated tag works."
   :type 'integer
   :group 'cxrefs)
 
+(defcustom cxrefs-kill-buffers-on-quit 'ask
+  "Kill opened buffers (and not buffer-modified-p) by cxrefs on quit.
+If nil, don't kill buffers.  If \\='ask, ask whether kill
+buffers or not.  If other, kill buffers without asking."
+  :group 'cxrefs)
+
 (defcustom cxrefs-min-location-width 10
   "Minimum width to show filename:line."
   :group 'cxrefs)
@@ -239,7 +245,8 @@ With this, even if slightly out of dated tag works."
   process
   (marker :read-only t)
   (selbuf :read-only t)
-  window-config)
+  window-config
+  buffer-list)
 
 (defmacro cxrefs-define-backend (sym)
   (let* ((name (symbol-name sym))
@@ -276,6 +283,28 @@ With this, even if slightly out of dated tag works."
 (defun cxrefs-process-init (ctx &optional option)
   (unless (cxrefs-process-check ctx)
     (setf (cxrefs-ctx-process ctx) (cxrefs-backend-init ctx option))))
+
+(defun cxrefs-target-buffer-add (ctx target-buffer)
+  (let ((buffers (cxrefs-ctx-buffer-list ctx)))
+    (when (not (member target-buffer buffers))
+      ;; Cleanup killed buffers
+      (setq buffers (delete nil (mapcar (lambda (buf)
+					  (and (buffer-live-p buf) buf))
+					buffers)))
+      ;; Add target-buffer
+      (setf (cxrefs-ctx-buffer-list ctx) (cons target-buffer buffers)))))
+
+(defun cxrefs-target-buffer-kill (ctx)
+  (when cxrefs-kill-buffers-on-quit
+    (let ((live-buffers (delete nil (mapcar (lambda (buf)
+					      (and (buffer-live-p buf)
+						   (not (buffer-modified-p buf))
+						   buf))
+					    (cxrefs-ctx-buffer-list ctx)))))
+      (when (and live-buffers (if (eq cxrefs-kill-buffers-on-quit 'ask)
+				  (y-or-n-p "Cxrefs: Kill opened buffers? ")
+				t))
+	(mapc #'kill-buffer live-buffers)))))
 
 ;; Utility functions
 (defun cxrefs-xref-make (ctx func file line hint)
@@ -383,6 +412,7 @@ With this, even if slightly out of dated tag works."
   (when ctx
     (cxrefs-marker-reset (cxrefs-ctx-marker ctx))
     (cxrefs-selbuf-reset (cxrefs-ctx-selbuf ctx))
+    (cxrefs-target-buffer-kill ctx)
     (cxrefs-context-del ctx)))
 
 (defvar cxrefs-no-context-error "No associated context for cxrefs")
@@ -895,15 +925,20 @@ with no args, if that value is non-nil.
   (beginning-of-line)
   (if (not (looking-at cxrefs-output-line-regexp))
       (error "Cxrefs Line not understood as a cxrefs reference line")
-    (let ((select-mode-window (get-buffer-window (current-buffer)))
-	  (ctx (cxrefs-context-current))
-	  (func (match-string cxrefs-output-func-place))
-	  (file (match-string cxrefs-output-file-place))
-	  (line (match-string cxrefs-output-line-place))
-	  (hint (match-string cxrefs-output-hint-place))
-	  (find-file-not-found-functions (list 'cxrefs-file-not-found))
-	  window)
-      (find-file-other-window (cxrefs-expand-file-name ctx file))
+    (let* ((select-mode-window (get-buffer-window (current-buffer)))
+	   (ctx (cxrefs-context-current))
+	   (func (match-string cxrefs-output-func-place))
+	   (file (match-string cxrefs-output-file-place))
+	   (line (match-string cxrefs-output-line-place))
+	   (hint (match-string cxrefs-output-hint-place))
+	   (find-file-not-found-functions (list 'cxrefs-file-not-found))
+	   (path (cxrefs-expand-file-name ctx file))
+	   (exists-buffer (get-file-buffer path))
+	   target-buffer target-window)
+      (setq target-buffer (find-file-other-window path))
+      ;; Remember newly opened buffer
+      (when (and (not exists-buffer) target-buffer)
+	(cxrefs-target-buffer-add ctx target-buffer))
       ;; Inherit cxrefs-basedir
       (setq cxrefs-basedir (cxrefs-ctx-dir ctx))
       (let ((history (cxrefs-ctx-selbuf ctx)))
@@ -913,11 +948,11 @@ with no args, if that value is non-nil.
       ;; Change point to target line
       (message "Cxrefs Function: %s" func)
       (cxrefs-goto-target-line (string-to-number line) hint)
-      (setq window (selected-window))
+      (setq target-window (selected-window))
       (if preview
 	  (select-window select-mode-window)
 	(delete-other-windows))
-      (with-selected-window window
+      (with-selected-window target-window
 	(run-hooks 'cxrefs-post-jump-hook)))))
 
 (defun cxrefs-select-preview ()
