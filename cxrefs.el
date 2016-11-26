@@ -1210,7 +1210,8 @@ Turning on Cxrefs-Select mode calls the value of the variable
 	(buffer (generate-new-buffer "*Gtags-Process*"))
 	process)
     (buffer-disable-undo buffer)
-    (setq process (start-process "Gtags-Process" buffer cxrefs-gtags-program))
+    (setq process (start-process "Gtags-Process" buffer
+				 cxrefs-gtags-program "-l"))
     (set-process-query-on-exit-flag process nil)
     ;; Wait prompt
     (accept-process-output process)
