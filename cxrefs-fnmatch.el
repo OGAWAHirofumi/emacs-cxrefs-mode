@@ -105,8 +105,8 @@ matches that wildcard according to shell rules."
       (concat "\\`" (cxrefs--wildcard-to-regexp wildcard) "\\'"))))
 
 (defun cxrefs-pattern-to-regexp (wildcard)
-  "Similar with `cxrefs-wildcard-to-regexp'. But this supports brace expansion
-in WILDCARD."
+  "Similar with `cxrefs-wildcard-to-regexp'.
+But this supports brace expansion in WILDCARD."
   (save-match-data
     ;; Brace expansion
     ;; TODO: nested brace is not implemented
@@ -127,7 +127,7 @@ in WILDCARD."
 				       (split-string str-in-brace ",")
 				       "\\|"))
 			  "\\)"))))
-	(setq result 
+	(setq result
 	      (concat result
 		      (cxrefs--wildcard-to-regexp (substring wildcard i))))
 	(concat "\\`" result "\\'")))))

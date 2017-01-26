@@ -53,8 +53,8 @@ This hook is called with current window/buffer/position on target."
   :group 'cxrefs)
 
 (defcustom cxrefs-use-filter-regexp nil
-  "If non-nil, use filter string as regexp. If nil, use filter
-string as shell pattern matching."
+  "If non-nil, use filter string as regexp.
+If nil, use filter string as shell pattern matching."
   :group 'cxrefs)
 
 (defcustom cxrefs-fuzzy-target-lines 100
@@ -64,7 +64,7 @@ With this, even if slightly out of dated tag works."
   :group 'cxrefs)
 
 (defcustom cxrefs-kill-buffers-on-quit 'ask
-  "Kill opened buffers (and not buffer-modified-p) by cxrefs on quit.
+  "Kill opened buffers (and not `buffer-modified-p') by cxrefs on quit.
 If nil, don't kill buffers.  If \\='ask, ask whether kill
 buffers or not.  If other, kill buffers without asking."
   :group 'cxrefs)
@@ -84,7 +84,7 @@ buffers or not.  If other, kill buffers without asking."
   :group 'cxrefs)
 
 (defcustom cxrefs-show-excluded-lines nil
-  "If non-nil, show excluded lines by filter. If nil, hidden."
+  "If non-nil, show excluded lines by filter.  If nil, hidden."
   :group 'cxrefs)
 
 (defvar cxrefs-excluded-line-sep "Excluded lines..."
@@ -120,7 +120,7 @@ buffers or not.  If other, kill buffers without asking."
   (= 0 (cxrefs-history-pos history)))
 
 (defun cxrefs-history-reset (history)
-  "Remove all history."
+  "Remove all history in HISTORY."
   ;; Clear out the history we are throwing away.
   (let ((kill-fn (cxrefs-history-kill-fn history))
 	(ring (cxrefs-history-ring history)))
@@ -131,13 +131,13 @@ buffers or not.  If other, kill buffers without asking."
   (setf (cxrefs-history-pos history) 0))
 
 (defun cxrefs-history-pop (history)
-  "Remove newest history."
+  "Remove newest history in HISTORY."
   (let ((ring (cxrefs-history-ring history)))
     (setf (cxrefs-history-pos history) 0)
     (or (ring-empty-p ring) (ring-remove ring 0))))
 
 (defun cxrefs-history-push (history new)
-  "Add new history as newest history."
+  "Insert onto HISTORY the new history NEW as newest history."
   (let* ((ring (cxrefs-history-ring history))
 	 (kill-fn (cxrefs-history-kill-fn history))
 	 (full (>= (ring-length ring) (ring-size ring)))
@@ -148,7 +148,7 @@ buffers or not.  If other, kill buffers without asking."
     (ring-insert ring new)))
 
 (defun cxrefs-history-add (history new)
-  "Add new history and remove all forward histories."
+  "Insert onto HISTORY the new history NEW, then remove all forward histories."
   (let ((ring (cxrefs-history-ring history))
 	(kill-fn (cxrefs-history-kill-fn history))
 	(pos (cxrefs-history-pos history)))
@@ -160,7 +160,7 @@ buffers or not.  If other, kill buffers without asking."
     (cxrefs-history-push history new)))
 
 (defun cxrefs-history-update-lru (history)
-  "Remove current history and re-add it as newest history."
+  "Update current history HISTORY as newest history."
   (let ((ring (cxrefs-history-ring history))
 	(pos (cxrefs-history-pos history)))
     (setf (cxrefs-history-pos history) 0)
@@ -168,7 +168,7 @@ buffers or not.  If other, kill buffers without asking."
       (ring-insert ring (ring-remove ring pos)))))
 
 (defun cxrefs-history-go-prev (history)
-  "Go previous history and return it."
+  "Go previous history on HISTORY and return it."
   (let ((ring (cxrefs-history-ring history))
 	(prev-pos (1+ (cxrefs-history-pos history))))
     (if (> prev-pos (1- (ring-length ring)))
@@ -177,7 +177,7 @@ buffers or not.  If other, kill buffers without asking."
       (ring-ref ring prev-pos))))
 
 (defun cxrefs-history-go-next (history)
-  "Go next history and return it."
+  "Go next history on HISTORY and return it."
   (let ((ring (cxrefs-history-ring history))
 	(next-pos (1- (cxrefs-history-pos history))))
     (if (< next-pos 0)
@@ -186,7 +186,7 @@ buffers or not.  If other, kill buffers without asking."
       (ring-ref ring next-pos))))
 
 (defun cxrefs-history-current (history)
-  "Retrun current history."
+  "Retrun current history on HISTORY."
   (let ((ring (cxrefs-history-ring history)))
     (if (ring-empty-p ring)
 	nil
@@ -408,7 +408,7 @@ buffers or not.  If other, kill buffers without asking."
   (cxrefs-context-add (cxrefs-ctx-make basedir)))
 
 (defun cxrefs-context-delete (ctx)
-  "Delete the cxrefs context associated with BASEDIR."
+  "Delete the cxrefs context CTX associated with BASEDIR."
   (when ctx
     (cxrefs-marker-reset (cxrefs-ctx-marker ctx))
     (cxrefs-selbuf-reset (cxrefs-ctx-selbuf ctx))
@@ -634,62 +634,72 @@ buffers or not.  If other, kill buffers without asking."
     (read-number "Depth: " cxrefs-hierarchy-depth)))
 
 (defun cxrefs-find-definition (string filter)
-  "Query the definition of the given STRING."
+  "Query the definition of the given STRING.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this definition" 'symbol)
 		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'define string filter))
 
 (defun cxrefs-find-symbol (string filter)
-  "Find this symbol STRING."
+  "Find this symbol STRING exclude filter in FILTER.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this symbol" 'symbol)
 		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'symbol string filter))
 
 (defun cxrefs-find-callee (string filter)
-  "Find callee of symbol STRING."
+  "Find callee of symbol STRING exclude filter in FILTER.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find callee of this" 'symbol)
 		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'callee string filter))
 
 (defun cxrefs-find-caller (string filter)
-  "Find caller of symbol STRING."
+  "Find caller of symbol STRING exclude filter in FILTER.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find caller of this" 'symbol)
 		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'caller string filter))
 
 (defun cxrefs-find-text (string filter)
-  "Find this text STRING."
+  "Find this text STRING exclude filter in FILTER.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this text" 'text)
 		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'text string filter))
 
 (defun cxrefs-find-grep (string filter)
-  "Find this grep pattern STRING."
+  "Find this grep pattern STRING.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this grep pattern" 'text)
 		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'grep string filter))
 
 (defun cxrefs-find-egrep (string filter)
-  "Find this egrep pattern STRING."
+  "Find this egrep pattern STRING.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this egrep pattern" 'text)
 		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'egrep string filter))
 
 (defun cxrefs-find-file (string filter)
-  "Find this file STRING."
+  "Find this file STRING.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this file" 'filename)
 		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'file string filter))
 
 (defun cxrefs-find-includer (string filter)
-  "Find files #including this file STRING."
+  "Find files #including this file STRING.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list
 		(cxrefs-read-string "Find files #including this" 'filename)
 		(and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'includer string filter))
 
 (defun cxrefs-find-assign (string filter)
-  "Find assignments to this symbol STRING."
+  "Find assignments to this symbol STRING.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find assignments to this" 'symbol)
 		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'assign string filter))
@@ -723,14 +733,16 @@ buffers or not.  If other, kill buffers without asking."
   (message "Quit cxrefs"))
 
 (defun cxrefs-find-caller-hierarchy (string depth filter)
-  "Find hierarchical callers of STRING."
+  "Find hierarchical callers of STRING until DEPTH deep caller.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find hierarchical callers" 'symbol)
 		     (cxrefs-read-depth)
 		     (and current-prefix-arg (cxrefs-read-filter))))
   (cxrefs-show-xref-select 'caller-hierarchy string filter depth))
 
 (defun cxrefs-find-callee-hierarchy (string depth filter)
-  "Find hierarchical callee of STRING."
+  "Find hierarchical callee of STRING until DEPTH deep callee.
+A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find hierarchical callees" 'symbol)
 		     (cxrefs-read-depth)
 		     (and current-prefix-arg (cxrefs-read-filter))))
@@ -813,14 +825,16 @@ with no args, if that value is non-nil.
   "Position number of `cxrefs-output-line-regexp' which locates hint string.")
 
 (defun cxrefs-select-next-line (&optional count)
-  "Cxrefs select mode next line."
+  "Cxrefs select mode next line.
+Move cursor vertically down COUNT lines."
   (interactive)
   (end-of-line)
   (re-search-forward cxrefs-output-line-regexp nil t count)
   (beginning-of-line))
 
 (defun cxrefs-select-previous-line (&optional count)
-  "Cxrefs select mode previous line."
+  "Cxrefs select mode previous line.
+Move cursor vertically up COUNT lines."
   (interactive)
   (beginning-of-line)
   (re-search-backward cxrefs-output-line-regexp nil t count)
@@ -836,7 +850,8 @@ with no args, if that value is non-nil.
       (list prefix depth arrow))))
 
 (defun cxrefs-select-depth-next-line (&optional count)
-  "Cxrefs select mode next line on same depth and hierarchy."
+  "Cxrefs select mode next line on same depth and hierarchy.
+Move cursor vertically down COUNT lines on same depth and hierarchy."
   (interactive)
   (let ((info (cxrefs-depth-info)))
     (when info
@@ -854,7 +869,8 @@ with no args, if that value is non-nil.
       (beginning-of-line))))
 
 (defun cxrefs-select-depth-previous-line (&optional count)
-  "Cxrefs select mode previous line on same depth and hierarchy."
+  "Cxrefs select mode previous line on same depth and hierarchy.
+Move cursor vertically up COUNT lines on same depth and hierarchy."
   (interactive)
   (let ((info (cxrefs-depth-info)))
     (when info
@@ -920,7 +936,8 @@ with no args, if that value is non-nil.
     (beginning-of-line)))
 
 (defun cxrefs-select-interpret-line (&optional preview)
-  "Parse the line under the cursor as a cxrefs output reference line."
+  "Parse the line under the cursor as a cxrefs output reference line.
+If PREVIEW is non-nil, show window without selecting."
   (interactive "P")
   (beginning-of-line)
   (if (not (looking-at cxrefs-output-line-regexp))
@@ -1129,7 +1146,7 @@ Turning on Cxrefs-Select mode calls the value of the variable
     process))
 
 (defun cxrefs-cscope-ask-files-command (basedir)
-  "Retrun a command for creating cscope.files."
+  "Return a command for creating cscope.files for BASEDIR."
   ;; If we don't know the command yet, ask user.
   (let ((cmd (read-string "Command for creating cscope.files: "
 			  (car cxrefs-cscope-build-files-history)
@@ -1139,7 +1156,7 @@ Turning on Cxrefs-Select mode calls the value of the variable
     (format cmd basedir)))
 
 (defun cxrefs-cscope-build-db (ctx)
-  "Build cscope.files."
+  "Build cscope.files with CTX."
   (let* ((basedir (cxrefs-ctx-dir ctx))
 	 (command (cxrefs-cscope-ask-files-command basedir))
 	 (default-directory basedir))
@@ -1218,7 +1235,7 @@ Turning on Cxrefs-Select mode calls the value of the variable
     process))
 
 (defun cxrefs-gtags-build-db (ctx)
-  "Build GTAGS."
+  "Build GTAGS with CTX."
   (let* ((basedir (cxrefs-ctx-dir ctx))
 	 (command cxrefs-gtags-build-program)
 	 (default-directory basedir))
