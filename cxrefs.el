@@ -104,7 +104,7 @@ buffers or not.  If other, kill buffers without asking."
 
 ;; History management helpers
 (cl-defstruct (cxrefs-history
-	       (:constructor nil)
+	       (:constructor nil)	; no default
 	       (:copier nil)
 	       (:predicate nil)
 	       (:constructor cxrefs-history-make (length
@@ -233,7 +233,7 @@ buffers or not.  If other, kill buffers without asking."
 
 ;;; Context helpers
 (cl-defstruct (cxrefs-ctx
-	       (:constructor nil)
+	       (:constructor nil)	; no default
 	       (:copier nil)
 	       (:predicate nil)
 	       (:constructor cxrefs-ctx-make (dir
