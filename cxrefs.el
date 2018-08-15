@@ -40,52 +40,53 @@
 
 (defcustom cxrefs-backend-default 'cscope
   "Default backend."
-  :group 'cxrefs)
+  :type 'symbol)
 
 (defcustom cxrefs-post-jump-hook '(recenter
 				   cxrefs-highlight-position)
   "Hook after jumping to target position.
 This hook is called with current window/buffer/position on target."
-  :group 'cxrefs)
+  :type 'hook)
 
 (defcustom cxrefs-hierarchy-depth 4
   "Default depth for function hierarchy."
-  :group 'cxrefs)
+  :type 'integer)
 
 (defcustom cxrefs-use-filter-regexp nil
   "If non-nil, use filter string as regexp.
 If nil, use filter string as shell pattern matching."
-  :group 'cxrefs)
+  :type 'boolean)
 
 (defcustom cxrefs-fuzzy-target-lines 100
   "If non-nil, search target line from tag hint for this lines range.
 With this, even if slightly out of dated tag works."
-  :type 'integer
-  :group 'cxrefs)
+  :type 'integer)
 
 (defcustom cxrefs-kill-buffers-on-quit 'ask
   "Kill opened buffers (and not `buffer-modified-p') by cxrefs on quit.
 If nil, don't kill buffers.  If \\='ask, ask whether kill
 buffers or not.  If other, kill buffers without asking."
-  :group 'cxrefs)
+  :type '(choice (const :tag "ask to user" 'ask)
+		 (const :tag "don't kill buffer" nil)
+		 (other :tag "without asking" t)))
 
 (defcustom cxrefs-min-location-width 10
   "Minimum width to show filename:line."
-  :group 'cxrefs)
+  :type 'integer)
 (defcustom cxrefs-min-function-width 10
   "Minimum width to show function."
-  :group 'cxrefs)
+  :type 'integer)
 
 (defcustom cxrefs-marker-length 32
   "Length of marker history."
-  :group 'cxrefs)
+  :type 'integer)
 (defcustom cxrefs-selbuf-length 32
   "Length of select buffer history."
-  :group 'cxrefs)
+  :type 'integer)
 
 (defcustom cxrefs-show-excluded-lines nil
   "If non-nil, show excluded lines by filter.  If nil, hidden."
-  :group 'cxrefs)
+  :type 'boolean)
 
 (defvar cxrefs-excluded-line-sep "Excluded lines..."
   "Separator line for matched and excluded match lines.")
@@ -1101,7 +1102,7 @@ Turning on Cxrefs-Select mode calls the value of the variable
 
 (defcustom cxrefs-cscope-program "cscope"
   "The name of the cscope executable."
-  :group 'cxrefs-cscope)
+  :type 'string)
 
 (defcustom cxrefs-cscope-build-files-history
   '("cscope-linux.pl"
@@ -1109,7 +1110,7 @@ Turning on Cxrefs-Select mode calls the value of the variable
     "cscope-freebsd.pl"
     "cscope-glibc.pl")
   "*Command for creating cscope.file."
-  :group 'cxrefs-cscope)
+  :type '(repeat string))
 
 (defvar cxrefs-cscope-command-table
   '((symbol		. "0") (define		. "1")
@@ -1212,11 +1213,11 @@ Turning on Cxrefs-Select mode calls the value of the variable
 
 (defcustom cxrefs-gtags-program "gtags-cscope"
   "The name of the gtags executable."
-  :group 'cxrefs-gtags)
+  :type 'string)
 
 (defcustom cxrefs-gtags-build-program "gtags"
   "The name of the gtags executable to make database."
-  :group 'cxrefs-gtags)
+  :type 'string)
 
 (defun cxrefs-gtags-check-db (ctx)
   (file-exists-p (concat (cxrefs-ctx-dir ctx) "GTAGS")))
