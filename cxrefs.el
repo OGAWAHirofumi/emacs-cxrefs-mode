@@ -398,7 +398,11 @@ buffers or not.  If other, kill buffers without asking."
 
 (defun cxrefs-basedir-list ()
   "Return the all cxrefs-basedir."
-  (maphash (lambda (_key ctx) (cxrefs-ctx-dir ctx)) cxrefs-context-hash))
+  (let (basedir-list)
+    (maphash (lambda (_key ctx)
+	       (push (cxrefs-ctx-dir ctx) basedir-list))
+	     cxrefs-context-hash)
+    basedir-list))
 
 (defun cxrefs-context-current ()
   "Retrun the current cxrefs context."
@@ -490,8 +494,39 @@ buffers or not.  If other, kill buffers without asking."
   (let* ((file-name-history (cxrefs-basedir-list))
 	 (basedir (read-directory-name "Locate root directory: "
 				       default-directory default-directory t)))
-    ;; Make sure the last char of "root" is `/'
-    (file-name-as-directory (expand-file-name basedir))))
+    basedir))
+
+(defun cxrefs-find-basedir ()
+  "Find basedir of ancestor instance for current dir."
+  (let ((basedir-list (cxrefs-basedir-list)))
+    (when basedir-list
+      (let ((curdir default-directory)
+	    prevdir)
+	(catch 'loop
+	  (while (not (equal prevdir curdir))
+	    (setq curdir (file-name-as-directory curdir))
+	    ;; match with exists instance?
+	    (let ((basedir (car (member curdir basedir-list))))
+	      (when basedir
+		(throw 'loop basedir)))
+	    (setq prevdir curdir)
+	    ;; climb up the directory hierarchy
+	    (setq curdir (file-name-directory (directory-file-name curdir))))))
+      )))
+
+(defun cxrefs-get-basedir (&optional try-exists)
+  "Get basedir of ctx.
+
+If TRY-EXISTS is t, try to use an existent ctx if there is cxrefs
+instance for ancestor dir of current dir.
+
+If not exists, ask to user."
+  (if cxrefs-basedir
+      cxrefs-basedir
+    (let ((basedir (or (and try-exists (cxrefs-find-basedir))
+		       (cxrefs-ask-basedir))))
+      ;; Make sure the last char of "root" is `/'
+      (file-name-as-directory (expand-file-name basedir)))))
 
 ;; Find exists databases for each backends. If no database, use default.
 (defun cxrefs-select-backend (ctx)
@@ -515,7 +550,7 @@ buffers or not.  If other, kill buffers without asking."
 
 (defun cxrefs-check-tags-table ()
   (unless cxrefs-basedir
-    (setq cxrefs-basedir (cxrefs-ask-basedir)))
+    (setq cxrefs-basedir (cxrefs-get-basedir 'try-exists)))
   (unless (cxrefs-context-current)
     (cxrefs-context-make cxrefs-basedir))
   (cxrefs-check-and-build-db))
@@ -732,6 +767,16 @@ A prefix argument to set filter glob FILTER to exclude specified files."
       (cxrefs-context-delete ctx)))
   (setq cxrefs-basedir nil)
   (message "Quit cxrefs"))
+
+(defun cxrefs-set-basedir ()
+  "Set Cxrefs basedir.
+The purpose is to set basedir even if there is the instance for
+ancestor dir."
+  (interactive)
+  (when cxrefs-basedir
+    (cxrefs-quit))
+  (setq cxrefs-basedir (cxrefs-get-basedir))
+  (cxrefs-check-tags-table))
 
 (defun cxrefs-find-caller-hierarchy (string depth filter)
   "Find hierarchical callers of STRING until DEPTH deep caller.
