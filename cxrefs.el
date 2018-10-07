@@ -1,6 +1,6 @@
 ;;; cxrefs.el --- Cross reference for Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 2001-2015  OGAWA Hirofumi
+;; Copyright (C) 2001-2018  OGAWA Hirofumi
 
 ;; Author: OGAWA Hirofumi <hirofumi@mail.parknet.co.jp>
 ;; Keywords: tools
@@ -277,12 +277,12 @@ buffers or not.  If other, kill buffers without asking."
 (defun cxrefs-backend-command (ctx cmd-type &optional string)
   (funcall (cxrefs-ctx-backend-fn ctx :command-fn) ctx cmd-type string))
 
-(defun cxrefs-process-check (ctx)
+(defun cxrefs-process-live-p (ctx)
   (let ((process (cxrefs-ctx-process ctx)))
     (and (processp process) (process-live-p process))))
 
 (defun cxrefs-process-init (ctx &optional option)
-  (unless (cxrefs-process-check ctx)
+  (unless (cxrefs-process-live-p ctx)
     (setf (cxrefs-ctx-process ctx) (cxrefs-backend-init ctx option))))
 
 (defun cxrefs-target-buffer-add (ctx target-buffer)
@@ -308,16 +308,34 @@ buffers or not.  If other, kill buffers without asking."
 	(mapc #'kill-buffer live-buffers)))))
 
 ;; Utility functions
-(defun cxrefs-xref-make (ctx func file line hint)
-  (let* ((file (cxrefs-relative-file-name ctx file))
-	 (linenum (if (stringp line) (string-to-number line) line))
-	 (location (format "%s:%d" file linenum))
-	 (loc-len (length location))
-	 (func-len (length func)))
-    (list :func-len func-len :func func
-	  :loc-len loc-len :location location
-	  :file file :line linenum
-	  :hint hint)))
+(cl-defstruct (cxrefs-location
+	       (:constructor nil)	; no default
+	       (:copier nil)
+	       (:predicate nil)
+	       (:constructor
+		cxrefs-location-make (ctx
+				      func
+				      file
+				      line
+				      hint
+				      &aux
+				      (file
+				       (cxrefs-relative-file-name ctx file))
+				      (funclen (length func))
+				      (line (if (stringp line)
+						(string-to-number line)
+					      line))
+				      (str (format "%s:%d" file line))
+				      (strlen (length str)))))
+  (file :read-only t)
+  func
+  funclen
+  (line :read-only t)
+  (str :read-only t)
+  (strlen :read-only t)
+  (hint :read-only t)
+  depth
+  excluded)
 
 (defun cxrefs-relative-file-name (ctx file)
   (let* ((basedir (cxrefs-ctx-dir ctx))
@@ -332,7 +350,7 @@ buffers or not.  If other, kill buffers without asking."
 	(identity file)
       (concat basedir file))))
 
-(defun cxrefs-xref-output (buffer ctx cmd-type string filter xref)
+(defun cxrefs-xref-output (buffer ctx cmd-type string filter locations)
   (let ((exclude-info (list :func-len cxrefs-min-function-width
 			    :loc-len cxrefs-min-location-width
 			    :filter (nth 0 filter)))
@@ -340,10 +358,13 @@ buffers or not.  If other, kill buffers without asking."
 			    :loc-len cxrefs-min-location-width
 			    :filter (nth 1 filter))))
     ;; Calculate maximum length for :func-len and :loc-len
-    (dolist (x xref)
-      (let ((info (if (plist-get x :exclude) exclude-info include-info)))
+    (dolist (loc locations)
+      (let ((info (if (cxrefs-location-excluded loc) exclude-info include-info)))
 	(dolist (prop '(:func-len :loc-len))
-	  (let ((maxlen (max (plist-get info prop) (plist-get x prop))))
+	  (let ((maxlen (max (plist-get info prop)
+			     (if (eq prop :func-len)
+				 (cxrefs-location-funclen loc)
+			       (cxrefs-location-strlen loc)))))
 	    (setq info (plist-put info prop maxlen))))))
     ;; Make format string
     (dolist (info (list exclude-info include-info))
@@ -370,9 +391,12 @@ buffers or not.  If other, kill buffers without asking."
 			(plist-get include-info :filter))))
       (insert "\n")
       (setq include-info (plist-put include-info :marker (point-marker)))
-      (dolist (x xref)
-	(let ((info (if (plist-get x :exclude) exclude-info include-info)))
-	  (when (and (plist-get x :exclude) (not (plist-get info :marker)))
+      (dolist (loc locations)
+	(let ((info (if (cxrefs-location-excluded loc)
+			exclude-info
+		      include-info)))
+	  (when (and (cxrefs-location-excluded loc)
+		     (not (plist-get info :marker)))
 	    (insert "\n")
 	    (insert cxrefs-excluded-line-sep "\n")
 	    (setq info (plist-put info :marker (point-marker))))
@@ -381,8 +405,9 @@ buffers or not.  If other, kill buffers without asking."
 	  ;; Insert xrefs
 	  (insert-before-markers
 	   (format (plist-get info :format-str)
-		   (plist-get x :func) (plist-get x :location)
-		   (plist-get x :hint))))))
+		   (cxrefs-location-func loc)
+		   (cxrefs-location-str loc)
+		   (cxrefs-location-hint loc))))))
     ))
 
 ;; Cxrefs context management
@@ -556,18 +581,18 @@ If not exists, ask to user."
   (cxrefs-check-and-build-db))
 
 ;; Mark if matches exclude regexp, but not matches include regexp
-(defun cxrefs-xref-mark-exclude (filter xref)
+(defun cxrefs-xref-mark-exclude (filter locations)
   (let ((exclude (nth 0 filter))
 	(include (nth 1 filter)))
     (if (not exclude)
-	xref
-      (mapcar (lambda (x)
-		(let* ((file (plist-get x :file)))
-		  (if (and (not (and include (string-match include file)))
-			   (string-match exclude file))
-		      (plist-put x :exclude t)
-		    x)))
-	      xref))))
+	locations
+      (mapcar (lambda (loc)
+		(let* ((file (cxrefs-location-file loc)))
+		  (when (and (not (and include (string-match include file)))
+			     (string-match exclude file))
+		    (setf (cxrefs-location-excluded loc) t))
+		  loc))
+	      locations))))
 
 (defun cxrefs-backend-command-with-mark (ctx cmd-type string filter)
   (cxrefs-xref-mark-exclude filter
@@ -577,26 +602,27 @@ If not exists, ask to user."
 (defun cxrefs-xref-hierarchy2 (ctx cmd-type func whole depth max-depth
 				   arrow filter)
   (let ((prefix (format "%s%s" (make-string depth ? ) arrow))
-	(xref (cxrefs-backend-command-with-mark ctx cmd-type func filter)))
-    (dolist (x xref whole)
-      (let ((next-func (plist-get x :func)))
+	(locations (cxrefs-backend-command-with-mark ctx cmd-type func filter)))
+    (dolist (loc locations whole)
+      (let ((next-func (cxrefs-location-func loc)))
 	;; Add hierarchy annotation to function
 	(let ((prefix-func (format "%s %s" prefix next-func)))
-	  (setq x (plist-put x :func prefix-func))
-	  (setq x (plist-put x :func-len (length prefix-func))))
+	  (setf (cxrefs-location-func loc)  prefix-func)
+	  (setf (cxrefs-location-funclen loc) (length prefix-func)))
+	(setf (cxrefs-location-depth loc) depth)
 	;; Make whole list by reverse order
-	(push (plist-put x :depth depth) whole)
-	(when (and (< depth max-depth) (not (plist-get x :exclude)))
+	(push loc whole)
+	(when (and (< depth max-depth) (not (cxrefs-location-excluded loc)))
 	  (setq whole (cxrefs-xref-hierarchy2 ctx cmd-type next-func whole
 					      (1+ depth) max-depth
 					      arrow filter)))))
     ))
 (defun cxrefs-xref-hierarchy (ctx cmd-type string filter args)
+  (defconst cxrefs-cmd-type-table '((caller-hierarchy caller "<-")
+				    (callee-hierarchy callee "->")))
   (let* ((max-depth (nth 0 args))
-	 (cmd-type-table '((caller-hierarchy caller "<-")
-			   (callee-hierarchy callee "->")))
-	 (type (nth 1 (assoc cmd-type cmd-type-table)))
-	 (arrow (nth 2 (assoc cmd-type cmd-type-table))))
+	 (type (nth 1 (assoc cmd-type cxrefs-cmd-type-table)))
+	 (arrow (nth 2 (assoc cmd-type cxrefs-cmd-type-table))))
     (nreverse (cxrefs-xref-hierarchy2 ctx type string nil 0 max-depth
 				      arrow filter))))
 
@@ -627,8 +653,8 @@ If not exists, ask to user."
 	  (switch-to-buffer buffer))
       (pop-to-buffer buffer))
     ;; Insert cxrefs-select output
-    (let ((xref (cxrefs-xref-command ctx cmd-type string filter args)))
-      (cxrefs-xref-output buffer ctx cmd-type string filter xref))
+    (let ((locations (cxrefs-xref-command ctx cmd-type string filter args)))
+      (cxrefs-xref-output buffer ctx cmd-type string filter locations))
     (goto-char (point-min))
     (cxrefs-select-mode)
     (run-hooks 'cxrefs-show-xref-select-hook)))
@@ -851,7 +877,6 @@ with no args, if that value is non-nil.
   :version "25.1"
   :lighter " Cxrefs"
   :keymap cxrefs-mode-map)
-;  (when cxrefs-mode (cxrefs-check-tags-table)))
 
 ;; cxrefs-select output parser
 (defvar cxrefs-select-output-basedir
@@ -1210,40 +1235,45 @@ Turning on Cxrefs-Select mode calls the value of the variable
     (unless (= 0 (shell-command command))
       (error "Couldn't create cscope.files"))))
 
-(defun cxrefs-cscope-make-xref (ctx command string)
-  (let ((process (cxrefs-ctx-process ctx))
-	xref)
-    (with-current-buffer (process-buffer process)
-      (erase-buffer)
-      (process-send-string process (concat command string "\n"))
-      (cxrefs-cscope-wait-prompt process)
-      (goto-char (point-min))
+(defmacro with-cxrefs-cmd-output (ctx command &rest body)
+  (declare (indent 2) (debug t))
+  `(let ((process (cxrefs-ctx-process ,ctx)))
+     (with-current-buffer (process-buffer process)
+       (erase-buffer)
+       (process-send-string process (concat ,command "\n"))
+       (cxrefs-cscope-wait-prompt process)
+       (goto-char (point-min))
+       ,@body)))
+
+(defun cxrefs-cscope-make-locations (ctx command)
+  (with-cxrefs-cmd-output ctx command
+    (let (locations)
       (while (re-search-forward
 	      "^\\(.+?\\) \\([^ \t]+?\\) \\([0-9]+?\\) \\(.*\\)" nil t)
 	(let ((file (match-string 1))
 	      (func (match-string 2))
 	      (line (match-string 3))
 	      (hint (match-string 4)))
-	  (push (cxrefs-xref-make ctx func file line hint) xref))))
-    (nreverse xref)))
+	  (push (cxrefs-location-make ctx func file line hint) locations)))
+      (nreverse locations))))
 
 (defun cxrefs-cscope-command (ctx cmd-type &optional string)
   (let ((cmd (cdr (assoc cmd-type cxrefs-cscope-command-table))))
     (cond
      ((stringp cmd)
       (cxrefs-process-init ctx)
-      (cxrefs-cscope-make-xref ctx cmd string))
+      (cxrefs-cscope-make-locations ctx (concat cmd string)))
      ((eq cmd-type 'rebuild)
       ;; Quit if alive
-      (when (cxrefs-process-check ctx)
-	(cxrefs-cscope-make-xref ctx "q" ""))
+      (when (cxrefs-process-live-p ctx)
+	(with-cxrefs-cmd-output ctx "q"))
       ;; Then rebuild
       (cxrefs-process-init ctx 'rebuild)
-      (cxrefs-cscope-make-xref ctx "r" ""))
+      (with-cxrefs-cmd-output ctx "r"))
      ((eq cmd-type 'quit)
       (let ((process (cxrefs-ctx-process ctx)))
 	(when (processp process)
-	  (cxrefs-cscope-make-xref ctx "q" "")
+	  (with-cxrefs-cmd-output ctx "q")
 	  (when (process-buffer process)
 	    (kill-buffer (process-buffer process)))))
       (setf (cxrefs-ctx-process ctx) nil)))
@@ -1294,7 +1324,7 @@ Turning on Cxrefs-Select mode calls the value of the variable
       (cxrefs-cscope-command ctx cmd-type string)
     ;; rebuild
     (cxrefs-process-init ctx 'rebuild)
-    (cxrefs-cscope-make-xref ctx "r" "")))
+    (with-cxrefs-cmd-output ctx "r")))
 
 (cxrefs-define-backend gtags)
 
