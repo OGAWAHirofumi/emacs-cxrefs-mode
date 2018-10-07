@@ -1264,8 +1264,10 @@ Turning on Cxrefs-Select mode calls the value of the variable
       (cxrefs-process-init ctx)
       (cxrefs-cscope-make-locations ctx (concat cmd string)))
      ((eq cmd-type 'rebuild)
-      ;; Quit if alive
-      (when (cxrefs-process-live-p ctx)
+      ;; Quit if alive (cscope doesn't reload inverted index,
+      ;; i.e. built with "-q" option). So restart cscope itself.
+      (when (and (eq (cxrefs-ctx-backend-key ctx) 'cscope)
+		 (cxrefs-process-live-p ctx))
 	(with-cxrefs-cmd-output ctx "q"))
       ;; Then rebuild
       (cxrefs-process-init ctx 'rebuild)
@@ -1319,12 +1321,7 @@ Turning on Cxrefs-Select mode calls the value of the variable
     (unless (= 0 (shell-command command))
       (error "Couldn't create cscope.files"))))
 
-(defun cxrefs-gtags-command (ctx cmd-type &optional string)
-  (if (not (eq cmd-type 'rebuild))
-      (cxrefs-cscope-command ctx cmd-type string)
-    ;; rebuild
-    (cxrefs-process-init ctx 'rebuild)
-    (with-cxrefs-cmd-output ctx "r")))
+(defalias 'cxrefs-gtags-command 'cxrefs-cscope-command)
 
 (cxrefs-define-backend gtags)
 
