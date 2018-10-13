@@ -1101,7 +1101,7 @@ If PREVIEW is non-nil, show window without selecting."
      (,cxrefs-output-line-place 'font-lock-keyword-face))))
 
 (defconst cxrefs-select-font-lock-defaults
-  '(cxrefs-select-font-lock-keywords t nil nil nil (font-lock-multiline . nil)))
+  '(cxrefs-select-font-lock-keywords t nil nil))
 
 (defvar cxrefs-select-mode-map
   (let ((map (make-sparse-keymap)))
@@ -1149,8 +1149,7 @@ Turning on Cxrefs-Select mode calls the value of the variable
   (setq major-mode 'cxrefs-select-mode)
   (setq mode-name "Cxrefs-Select")
   (use-local-map cxrefs-select-mode-map)
-  (set (make-local-variable 'font-lock-defaults)
-       cxrefs-select-font-lock-defaults)
+  (setq-local font-lock-defaults cxrefs-select-font-lock-defaults)
   (setq buffer-read-only t)
   (setq truncate-lines t)
   (cxrefs-select-read-context)
@@ -1174,9 +1173,16 @@ Turning on Cxrefs-Select mode calls the value of the variable
   "The name of the cscope executable."
   :type 'string)
 
+(defmacro cxrefs-cscope-build-files ()
+  `(concat "find -L . -name '*.[chlyS]'"
+	   ,@(mapcar (lambda (ext)
+		       (concat " -o -name '*." ext "'"))
+		     '("cc" "cpp" "cxx" "c++" "hh" "hpp" "hxx" "h++"))
+	   " > cscope.files"))
+
 (defcustom cxrefs-cscope-build-files-history
-  '("cscope-linux.pl"
-    "find -L . -name '*.[chlyS]' -o -name '*.cc' -o -name '*.cpp' > cscope.files"
+  `("cscope-linux.pl"
+    ,(cxrefs-cscope-build-files)
     "cscope-freebsd.pl"
     "cscope-glibc.pl")
   "*Command for creating cscope.file."
