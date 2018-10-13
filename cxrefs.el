@@ -1174,7 +1174,7 @@ Turning on Cxrefs-Select mode calls the value of the variable
   :type 'string)
 
 (defmacro cxrefs-cscope-build-files ()
-  `(concat "find -L . -name '*.[chlyS]'"
+  `(concat "find -L . -type f -name '*.[chlyS]'"
 	   ,@(mapcar (lambda (ext)
 		       (concat " -o -name '*." ext "'"))
 		     '("cc" "cpp" "cxx" "c++" "hh" "hpp" "hxx" "h++"))
