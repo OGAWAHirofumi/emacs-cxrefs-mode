@@ -310,7 +310,7 @@ buffers or not.  If other, kill buffers without asking."
 ;; Utility functions
 (cl-defstruct (cxrefs-location
 	       (:constructor nil)	; no default
-	       (:copier nil)
+	       (:copier cxrefs-location-copy)
 	       (:predicate nil)
 	       (:constructor
 		cxrefs-location-make (ctx
@@ -599,12 +599,19 @@ If not exists, ask to user."
 			    (cxrefs-backend-command ctx cmd-type string)))
 
 ;; Make hierarchy by reverse order
-(defun cxrefs-xref-hierarchy2 (ctx cmd-type func whole depth max-depth
-				   arrow filter)
+(defun cxrefs-xref--hierarchy (ctx cmd-type func whole depth max-depth
+				   arrow filter locations-cache)
   (let ((prefix (format "%s%s" (make-string depth ? ) arrow))
-	(locations (cxrefs-backend-command-with-mark ctx cmd-type func filter)))
+	(locations (gethash func locations-cache)))
+    ;; If didn't hit locations-cache, ask to backend, then cache it
+    (when (null locations)
+      (setq locations
+	    (cxrefs-backend-command-with-mark ctx cmd-type func filter))
+      (puthash func locations locations-cache))
     (dolist (loc locations whole)
-      (let ((next-func (cxrefs-location-func loc)))
+      ;; Copy loc to avoid modify cached loc
+      (let* ((loc (cxrefs-location-copy loc))
+	     (next-func (cxrefs-location-func loc)))
 	;; Add hierarchy annotation to function
 	(let ((prefix-func (format "%s %s" prefix next-func)))
 	  (setf (cxrefs-location-func loc)  prefix-func)
@@ -613,18 +620,19 @@ If not exists, ask to user."
 	;; Make whole list by reverse order
 	(push loc whole)
 	(when (and (< depth max-depth) (not (cxrefs-location-excluded loc)))
-	  (setq whole (cxrefs-xref-hierarchy2 ctx cmd-type next-func whole
+	  (setq whole (cxrefs-xref--hierarchy ctx cmd-type next-func whole
 					      (1+ depth) max-depth
-					      arrow filter)))))
+					      arrow filter locations-cache)))))
     ))
 (defun cxrefs-xref-hierarchy (ctx cmd-type string filter args)
   (defconst cxrefs-cmd-type-table '((caller-hierarchy caller "<-")
 				    (callee-hierarchy callee "->")))
   (let* ((max-depth (nth 0 args))
 	 (type (nth 1 (assoc cmd-type cxrefs-cmd-type-table)))
-	 (arrow (nth 2 (assoc cmd-type cxrefs-cmd-type-table))))
-    (nreverse (cxrefs-xref-hierarchy2 ctx type string nil 0 max-depth
-				      arrow filter))))
+	 (arrow (nth 2 (assoc cmd-type cxrefs-cmd-type-table)))
+	 (locations-cache (make-hash-table :test #'equal)))
+    (nreverse (cxrefs-xref--hierarchy ctx type string nil 0 max-depth
+				      arrow filter locations-cache))))
 
 (defun cxrefs-xref-command (ctx cmd-type string filter args)
   ;; convert pattern to regexp
