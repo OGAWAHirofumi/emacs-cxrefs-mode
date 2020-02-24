@@ -114,8 +114,8 @@ buffers or not.  If other, kill buffers without asking."
 						  (ring (make-ring length)))))
   length
   (pos 0)
-  (kill-fn :read-only t)
-  (ring :read-only t))
+  (kill-fn nil :read-only t)
+  (ring nil :read-only t))
 
 (defun cxrefs-history-pos-top-p (history)
   (= 0 (cxrefs-history-pos history)))
@@ -244,8 +244,8 @@ buffers or not.  If other, kill buffers without asking."
   (dir :read-only t)
   backend
   process
-  (marker :read-only t)
-  (selbuf :read-only t)
+  (marker nil :read-only t)
+  (selbuf nil :read-only t)
   window-config
   buffer-list)
 
@@ -327,13 +327,13 @@ buffers or not.  If other, kill buffers without asking."
 					      line))
 				      (str (format "%s:%d" file line))
 				      (strlen (length str)))))
-  (file :read-only t)
+  (file nil :read-only t)
   func
   funclen
-  (line :read-only t)
-  (str :read-only t)
-  (strlen :read-only t)
-  (hint :read-only t)
+  (line nil :read-only t)
+  (str nil :read-only t)
+  (strlen nil :read-only t)
+  (hint nil :read-only t)
   depth
   excluded)
 
