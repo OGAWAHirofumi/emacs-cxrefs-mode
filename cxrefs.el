@@ -668,11 +668,9 @@ If not exists, ask to user."
     (run-hooks 'cxrefs-show-xref-select-hook)))
 
 (defun cxrefs-read-string (prompt-prefix type)
-  (let* ((default (thing-at-point type))
-	 (prompt (if default
-		     (format "%s (default %s): " prompt-prefix default)
-		   (format "%s: " prompt-prefix))))
-    (read-string prompt nil 'cxrefs-string-history default)))
+  (let ((default (thing-at-point type)))
+    (read-string (format-prompt prompt-prefix default)
+		 nil 'cxrefs-string-history default)))
 
 (defun cxrefs-read-exclude ()
   (let ((string (read-regexp
