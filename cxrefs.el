@@ -48,6 +48,10 @@
 This hook is called with current window/buffer/position on target."
   :type 'hook)
 
+(defcustom cxrefs-post-select-hook nil
+  "Hook after changing a current selected line."
+  :type 'hook)
+
 (defcustom cxrefs-hierarchy-depth 4
   "Default depth for function hierarchy."
   :type 'integer)
@@ -901,13 +905,39 @@ with no args, if that value is non-nil.
 (defvar cxrefs-output-hint-place 6
   "Position number of `cxrefs-output-line-regexp' which locates hint string.")
 
+(defun cxrefs-toggle-auto-preview (&optional arg)
+  "Toggle auto preview.
+
+If called interactively, toggle ‘auto preview’.  If the prefix
+argument is positive, enable the auto preview, and if it is zero
+or negative, disable the auto preview.
+
+If called from Lisp, toggle the mode if ARG is ‘toggle’.  Enable the
+mode if ARG is nil, omitted, or is a positive number.  Disable the
+mode if ARG is a negative number."
+  (interactive (list (if current-prefix-arg
+                         (prefix-numeric-value current-prefix-arg)
+                       'toggle)))
+  (let* ((cur (member 'cxrefs-select-preview cxrefs-post-select-hook))
+	 (enable (cond ((eq arg 'toggle)
+			(not cur))
+		       ((and (numberp arg) (< arg 1))
+			nil)
+		       (t
+			t))))
+    (if enable
+	(add-hook 'cxrefs-post-select-hook #'cxrefs-select-preview)
+      (remove-hook 'cxrefs-post-select-hook #'cxrefs-select-preview))
+    (message "%s auto preview" (if enable "Enabled" "Disabled"))))
+
 (defun cxrefs-select-next-line (&optional count)
   "Cxrefs select mode next line.
 Move cursor vertically down COUNT lines."
   (interactive)
   (end-of-line)
   (re-search-forward cxrefs-output-line-regexp nil t count)
-  (beginning-of-line))
+  (beginning-of-line)
+  (run-hooks 'cxrefs-post-select-hook))
 
 (defun cxrefs-select-previous-line (&optional count)
   "Cxrefs select mode previous line.
@@ -915,7 +945,8 @@ Move cursor vertically up COUNT lines."
   (interactive)
   (beginning-of-line)
   (re-search-backward cxrefs-output-line-regexp nil t count)
-  (beginning-of-line))
+  (beginning-of-line)
+  (run-hooks 'cxrefs-post-select-hook))
 
 (defun cxrefs-depth-info ()
   (let* ((line (buffer-substring (line-beginning-position) (line-end-position)))
@@ -1138,7 +1169,8 @@ If PREVIEW is non-nil, show window without selecting."
     (define-key map "\C-m"	'cxrefs-select-interpret-line)
     (define-key map [return]	'cxrefs-select-interpret-line)
     (define-key map " "		'cxrefs-select-preview)
-    (define-key map "\C-t"	'cxrefs-toggle-show-excluded)
+    (define-key map "\C-t"	'cxrefs-toggle-auto-preview)
+    (define-key map "E"		'cxrefs-toggle-show-excluded)
     (define-key map "q"		'cxrefs-select-quit)
     map)
   "Keymap used in Cxrefs select mode.")
