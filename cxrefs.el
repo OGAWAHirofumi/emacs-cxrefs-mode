@@ -245,7 +245,7 @@ buffers or not.  If other, kill buffers without asking."
 					      &aux
 					      (marker (cxrefs-marker-make))
 					      (selbuf (cxrefs-selbuf-make)))))
-  (dir :read-only t)
+  (dir dir :read-only t)
   backend
   process
   (marker nil :read-only t)
