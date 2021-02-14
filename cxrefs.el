@@ -457,7 +457,7 @@ buffers or not.  If other, kill buffers without asking."
 ;; Marker history interface
 (defun cxrefs-marker-go-next ()
   "Go next to where point was newer invoked."
-  (interactive)
+  (interactive nil cxrefs-mode)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
@@ -471,7 +471,7 @@ buffers or not.  If other, kill buffers without asking."
 
 (defun cxrefs-marker-go-prev ()
   "Go previous to where point was last invoked."
-  (interactive)
+  (interactive nil cxrefs-mode)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
@@ -492,7 +492,7 @@ buffers or not.  If other, kill buffers without asking."
 ;; Select buffer history interface
 (defun cxrefs-selbuf-go-next ()
   "Go next select buffer."
-  (interactive)
+  (interactive nil cxrefs-select-mode)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
@@ -503,7 +503,7 @@ buffers or not.  If other, kill buffers without asking."
 
 (defun cxrefs-selbuf-go-prev ()
   "Go previous select buffer."
-  (interactive)
+  (interactive nil cxrefs-select-mode)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
@@ -709,56 +709,64 @@ If not exists, ask to user."
   "Query the definition of the given STRING.
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this definition" 'symbol)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'define string filter))
 
 (defun cxrefs-find-symbol (string filter)
   "Find this symbol STRING exclude filter in FILTER.
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this symbol" 'symbol)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'symbol string filter))
 
 (defun cxrefs-find-callee (string filter)
   "Find callee of symbol STRING exclude filter in FILTER.
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find callee of this" 'symbol)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'callee string filter))
 
 (defun cxrefs-find-caller (string filter)
   "Find caller of symbol STRING exclude filter in FILTER.
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find caller of this" 'symbol)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'caller string filter))
 
 (defun cxrefs-find-text (string filter)
   "Find this text STRING exclude filter in FILTER.
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this text" 'text)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'text string filter))
 
 (defun cxrefs-find-grep (string filter)
   "Find this grep pattern STRING.
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this grep pattern" 'text)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'grep string filter))
 
 (defun cxrefs-find-egrep (string filter)
   "Find this egrep pattern STRING.
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this egrep pattern" 'text)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'egrep string filter))
 
 (defun cxrefs-find-file (string filter)
   "Find this file STRING.
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find this file" 'filename)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'file string filter))
 
 (defun cxrefs-find-includer (string filter)
@@ -766,19 +774,21 @@ A prefix argument to set filter glob FILTER to exclude specified files."
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list
 		(cxrefs-read-string "Find files #including this" 'filename)
-		(and current-prefix-arg (cxrefs-read-filter))))
+		(and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'includer string filter))
 
 (defun cxrefs-find-assign (string filter)
   "Find assignments to this symbol STRING.
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find assignments to this" 'symbol)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'assign string filter))
 
 (defun cxrefs-toggle-case ()
   "Toggle ignore/use letter case."
-  (interactive)
+  (interactive nil cxrefs-mode cxrefs-select-mode)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
@@ -787,7 +797,7 @@ A prefix argument to set filter glob FILTER to exclude specified files."
 
 (defun cxrefs-rebuild ()
   "Rebuild cross reference database."
-  (interactive)
+  (interactive nil cxrefs-mode cxrefs-select-mode)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
@@ -796,7 +806,7 @@ A prefix argument to set filter glob FILTER to exclude specified files."
 
 (defun cxrefs-quit ()
   "Quit backend and context."
-  (interactive)
+  (interactive nil cxrefs-mode cxrefs-select-mode)
   (let ((ctx (cxrefs-context-current)))
     (when ctx
       (cxrefs-backend-command ctx 'quit)
@@ -808,7 +818,7 @@ A prefix argument to set filter glob FILTER to exclude specified files."
   "Set Cxrefs basedir.
 The purpose is to set basedir even if there is the instance for
 ancestor dir."
-  (interactive)
+  (interactive nil cxrefs-mode cxrefs-select-mode)
   (when cxrefs-basedir
     (cxrefs-quit))
   (setq cxrefs-basedir (cxrefs-get-basedir))
@@ -819,7 +829,8 @@ ancestor dir."
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find hierarchical callers" 'symbol)
 		     (cxrefs-read-depth)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'caller-hierarchy string filter depth))
 
 (defun cxrefs-find-callee-hierarchy (string depth filter)
@@ -827,12 +838,13 @@ A prefix argument to set filter glob FILTER to exclude specified files."
 A prefix argument to set filter glob FILTER to exclude specified files."
   (interactive (list (cxrefs-read-string "Find hierarchical callees" 'symbol)
 		     (cxrefs-read-depth)
-		     (and current-prefix-arg (cxrefs-read-filter))))
+		     (and current-prefix-arg (cxrefs-read-filter)))
+	       cxrefs-mode cxrefs-select-mode)
   (cxrefs-show-xref-select 'callee-hierarchy string filter depth))
 
 (defun cxrefs-back-and-next-select ()
   "Return to the cxrefs-select buffer and advance the cursor by one line."
-  (interactive)
+  (interactive nil cxrefs-mode)
   (let ((ctx (cxrefs-context-current)))
     (if (not ctx)
 	(user-error cxrefs-no-context-error)
@@ -917,7 +929,8 @@ mode if ARG is nil, omitted, or is a positive number.  Disable the
 mode if ARG is a negative number."
   (interactive (list (if current-prefix-arg
                          (prefix-numeric-value current-prefix-arg)
-                       'toggle)))
+                       'toggle))
+	       cxrefs-mode cxrefs-select-mode)
   (let* ((cur (member 'cxrefs-select-preview cxrefs-post-select-hook))
 	 (enable (cond ((eq arg 'toggle)
 			(not cur))
@@ -933,7 +946,7 @@ mode if ARG is a negative number."
 (defun cxrefs-select-next-line (&optional count)
   "Cxrefs select mode next line.
 Move cursor vertically down COUNT lines."
-  (interactive)
+  (interactive nil cxrefs-select-mode)
   (end-of-line)
   (re-search-forward cxrefs-output-line-regexp nil t count)
   (beginning-of-line)
@@ -942,7 +955,7 @@ Move cursor vertically down COUNT lines."
 (defun cxrefs-select-previous-line (&optional count)
   "Cxrefs select mode previous line.
 Move cursor vertically up COUNT lines."
-  (interactive)
+  (interactive nil cxrefs-select-mode)
   (beginning-of-line)
   (re-search-backward cxrefs-output-line-regexp nil t count)
   (beginning-of-line)
@@ -960,7 +973,7 @@ Move cursor vertically up COUNT lines."
 (defun cxrefs-select-depth-next-line (&optional count)
   "Cxrefs select mode next line on same depth and hierarchy.
 Move cursor vertically down COUNT lines on same depth and hierarchy."
-  (interactive)
+  (interactive nil cxrefs-select-mode)
   (let ((info (cxrefs-depth-info)))
     (when info
       (end-of-line)
@@ -979,7 +992,7 @@ Move cursor vertically down COUNT lines on same depth and hierarchy."
 (defun cxrefs-select-depth-previous-line (&optional count)
   "Cxrefs select mode previous line on same depth and hierarchy.
 Move cursor vertically up COUNT lines on same depth and hierarchy."
-  (interactive)
+  (interactive nil cxrefs-select-mode)
   (let ((info (cxrefs-depth-info)))
     (when info
       (beginning-of-line)
@@ -1046,7 +1059,7 @@ Move cursor vertically up COUNT lines on same depth and hierarchy."
 (defun cxrefs-select-interpret-line (&optional preview)
   "Parse the line under the cursor as a cxrefs output reference line.
 If PREVIEW is non-nil, show window without selecting."
-  (interactive "P")
+  (interactive "P" cxrefs-select-mode)
   (beginning-of-line)
   (if (not (looking-at cxrefs-output-line-regexp))
       (error "Cxrefs Line not understood as a cxrefs reference line")
@@ -1082,7 +1095,7 @@ If PREVIEW is non-nil, show window without selecting."
 
 (defun cxrefs-select-preview ()
   "Call `cxrefs-select-interpret-line' without selecting other window."
-  (interactive)
+  (interactive nil cxrefs-select-mode)
   (cxrefs-select-interpret-line t))
 
 (defun cxrefs-show-hide-excluded (show)
@@ -1097,14 +1110,14 @@ If PREVIEW is non-nil, show window without selecting."
 
 (defun cxrefs-toggle-show-excluded ()
   "Toggle show/hide excluded lines."
-  (interactive)
+  (interactive nil cxrefs-select-mode)
   (let ((show (buffer-narrowed-p)))
     (cxrefs-show-hide-excluded show)
     (message "Cxrefs %s excluded lines" (if show "show" "hide"))))
 
 (defun cxrefs-select-quit ()
   "Quit select-mode, then restore window configuration."
-  (interactive)
+  (interactive nil cxrefs-select-mode)
   (let ((ctx (cxrefs-context-current)))
     (when ctx
       (let ((config (cxrefs-ctx-window-config ctx)))
