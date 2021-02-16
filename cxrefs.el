@@ -1189,25 +1189,16 @@ If PREVIEW is non-nil, show window without selecting."
   "Keymap used in Cxrefs select mode.")
 
 ;;;###autoload
-(defun cxrefs-select-mode ()
+(define-derived-mode cxrefs-select-mode special-mode "Cxrefs-Select"
   "Major mode for choosing a tag from tags list.
-Turning on Cxrefs-Select mode calls the value of the variable
-`cxrefs-select-mode-hook' with no args, if that value is non-nil.
-
-\\{cxrefs-select-mode-map}"
-  (interactive)
-  (kill-all-local-variables)
-  (setq major-mode 'cxrefs-select-mode)
-  (setq mode-name "Cxrefs-Select")
-  (use-local-map cxrefs-select-mode-map)
+Turning on Cxrefs-Select mode calls the value of the variable"
+  :interactive nil
   (setq-local font-lock-defaults cxrefs-select-font-lock-defaults)
-  (setq buffer-read-only t)
   (setq truncate-lines t)
   (cxrefs-select-read-context)
   (cxrefs-show-hide-excluded cxrefs-show-excluded-lines)
   (goto-char (point-min))
-  (cxrefs-select-next-line)
-  (run-hooks 'cxrefs-select-mode-hook))
+  (cxrefs-select-next-line))
 
 ;;; Hooks
 (defun cxrefs-highlight-position ()
