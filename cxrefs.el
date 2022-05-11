@@ -70,7 +70,7 @@ With this, even if slightly out of dated tag works."
   "Kill opened buffers (and not `buffer-modified-p') by cxrefs on quit.
 If nil, don't kill buffers.  If \\='ask, ask whether kill
 buffers or not.  If other, kill buffers without asking."
-  :type '(choice (const :tag "ask to user" 'ask)
+  :type '(choice (const :tag "ask to user" ask)
 		 (const :tag "don't kill buffer" nil)
 		 (other :tag "without asking" t)))
 
