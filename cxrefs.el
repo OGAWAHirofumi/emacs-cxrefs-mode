@@ -920,11 +920,11 @@ with no args, if that value is non-nil.
 (defun cxrefs-toggle-auto-preview (&optional arg)
   "Toggle auto preview.
 
-If called interactively, toggle ‘auto preview’.  If the prefix
+If called interactively, toggle `auto preview'.  If the prefix
 argument is positive, enable the auto preview, and if it is zero
 or negative, disable the auto preview.
 
-If called from Lisp, toggle the mode if ARG is ‘toggle’.  Enable the
+If called from Lisp, toggle the mode if ARG is `toggle'.  Enable the
 mode if ARG is nil, omitted, or is a positive number.  Disable the
 mode if ARG is a negative number."
   (interactive (list (if current-prefix-arg
