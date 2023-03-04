@@ -24,7 +24,7 @@
 ;;
 ;; (let ((regexp (cxrefs-wildcard-to-regexp "fs/**/[a-z]??*.c")))
 ;;   (string-match regexp str))
-;; 
+;;
 ;; (let ((regexp (cxrefs-pattern-to-regexp "{fs,mm}/*.c")))
 ;;   (string-match regexp str))
 
@@ -33,66 +33,66 @@
 (defun cxrefs--wildcard-to-regexp (wildcard)
   ;; wildcard => regexp
   (let ((len (length wildcard))
-	(i 0)
-	result)
+        (i 0)
+        result)
     (while (< i len)
       ;; Copy non-special characters.
       (let ((j (string-match "[][.*+\\^$?]" wildcard i)))
-	(when (not j)
-	  (setq j len))
-	(setq result (concat result (substring wildcard i j)))
-	(setq i j))
+        (when (not j)
+          (setq j len))
+        (setq result (concat result (substring wildcard i j)))
+        (setq i j))
       ;; Special characters.
       (when (< i len)
-	(let ((ch (aref wildcard i)))
-	  (setq i (1+ i))
-	  (cond
-	   ((char-equal ch ?\[)
-	    (cond
-	     ;; [...
-	     ((or (>= i len)
-		  (not (string-match "]" wildcard i)))
-	      (setq result (concat result "\\[")))
-	     ;; []
-	     ((and (< i len)
-		   (char-equal (aref wildcard i) ?\])
-		   ;; not []...]?
-		   (or (>= (1+ i) len)
-		       (not (string-match "]" wildcard (1+ i)))))
-	      (setq result (concat result "\\[\\]"))
-	      (setq i (1+ i)))
-	     ;; [...]
-	     (t
-	      ;; [!...] => [^...]
-	      (setq result (concat result "["))
-	      (when (char-equal (aref wildcard i) ?!)
-		(setq result (concat result "^"))
-		(setq i (1+ i)))
-	      (let ((j (1+ (string-match "]" wildcard i))))
-		(setq result (concat result (substring wildcard i j)))
-		(setq i j))
-	      )))
-	   ((char-equal ch ?\])
-	    (setq result (concat result "\\]")))
-	   ((char-equal ch ?.)
-	    (setq result (concat result "\\.")))
-	   ((char-equal ch ?+)
-	    (setq result (concat result "\\+")))
-	   ((char-equal ch ?\\)
-	    (setq result (concat result "\\\\")))
-	   ((char-equal ch ?^)
-	    (setq result (concat result "\\^")))
-	   ((char-equal ch ?$)
-	    (setq result (concat result "\\$")))
-	   ((char-equal ch ??)
-	    (setq result (concat result "[^\000/]")))
-	   ((char-equal ch ?*)
-	    (if (not (string-prefix-p "*" (substring wildcard i)))
-		(setq result (concat result "[^\000/]*"))
-	      ;; ** => .*
-	      (setq result (concat result ".*"))
-	      (setq i (1+ i))))
-	   ))))
+        (let ((ch (aref wildcard i)))
+          (setq i (1+ i))
+          (cond
+           ((char-equal ch ?\[)
+            (cond
+             ;; [...
+             ((or (>= i len)
+                  (not (string-match "]" wildcard i)))
+              (setq result (concat result "\\[")))
+             ;; []
+             ((and (< i len)
+                   (char-equal (aref wildcard i) ?\])
+                   ;; not []...]?
+                   (or (>= (1+ i) len)
+                       (not (string-match "]" wildcard (1+ i)))))
+              (setq result (concat result "\\[\\]"))
+              (setq i (1+ i)))
+             ;; [...]
+             (t
+              ;; [!...] => [^...]
+              (setq result (concat result "["))
+              (when (char-equal (aref wildcard i) ?!)
+                (setq result (concat result "^"))
+                (setq i (1+ i)))
+              (let ((j (1+ (string-match "]" wildcard i))))
+                (setq result (concat result (substring wildcard i j)))
+                (setq i j))
+              )))
+           ((char-equal ch ?\])
+            (setq result (concat result "\\]")))
+           ((char-equal ch ?.)
+            (setq result (concat result "\\.")))
+           ((char-equal ch ?+)
+            (setq result (concat result "\\+")))
+           ((char-equal ch ?\\)
+            (setq result (concat result "\\\\")))
+           ((char-equal ch ?^)
+            (setq result (concat result "\\^")))
+           ((char-equal ch ?$)
+            (setq result (concat result "\\$")))
+           ((char-equal ch ??)
+            (setq result (concat result "[^\000/]")))
+           ((char-equal ch ?*)
+            (if (not (string-prefix-p "*" (substring wildcard i)))
+                (setq result (concat result "[^\000/]*"))
+              ;; ** => .*
+              (setq result (concat result ".*"))
+              (setq i (1+ i))))
+           ))))
     result))
 
 (defun cxrefs-wildcard-to-regexp (wildcard)
@@ -101,7 +101,7 @@ The generated regexp will match a filename only if the filename
 matches that wildcard according to shell rules."
   (save-match-data
     (if (null wildcard)
-	nil
+        nil
       (concat "\\`" (cxrefs--wildcard-to-regexp wildcard) "\\'"))))
 
 (defun cxrefs-pattern-to-regexp (wildcard)
@@ -112,25 +112,25 @@ But this supports brace expansion in WILDCARD."
     ;; TODO: nested brace is not implemented
     ;; {foo,bar} => \(foo\|bar\)
     (if (null wildcard)
-	nil
+        nil
       (let ((i 0)
-	    (result nil))
-	(while (string-match "{\\([^},]+\\(,[^},]+\\)+\\)}" wildcard i)
-	  (let ((pre (substring wildcard i (match-beginning 0))))
-	    (setq i (match-end 0))
-	    ;; {..,..,..} => \(..\|..\|..\)
-	    (setq result
-		  (concat (cxrefs--wildcard-to-regexp pre)
-			  "\\("
-			  (let ((str-in-brace (match-string 1 wildcard)))
-			    (mapconcat 'cxrefs--wildcard-to-regexp
-				       (split-string str-in-brace ",")
-				       "\\|"))
-			  "\\)"))))
-	(setq result
-	      (concat result
-		      (cxrefs--wildcard-to-regexp (substring wildcard i))))
-	(concat "\\`" result "\\'")))))
+            (result nil))
+        (while (string-match "{\\([^},]+\\(,[^},]+\\)+\\)}" wildcard i)
+          (let ((pre (substring wildcard i (match-beginning 0))))
+            (setq i (match-end 0))
+            ;; {..,..,..} => \(..\|..\|..\)
+            (setq result
+                  (concat (cxrefs--wildcard-to-regexp pre)
+                          "\\("
+                          (let ((str-in-brace (match-string 1 wildcard)))
+                            (mapconcat 'cxrefs--wildcard-to-regexp
+                                       (split-string str-in-brace ",")
+                                       "\\|"))
+                          "\\)"))))
+        (setq result
+              (concat result
+                      (cxrefs--wildcard-to-regexp (substring wildcard i))))
+        (concat "\\`" result "\\'")))))
 
 (provide 'cxrefs-fnmatch)
 ;;; cxrefs-fnmatch.el ends here
