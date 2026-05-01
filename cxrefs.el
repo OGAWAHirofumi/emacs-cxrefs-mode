@@ -1247,7 +1247,7 @@ Turning on Cxrefs-Select mode calls the value of the variable"
 (defun cxrefs-cscope-init (ctx &optional option)
   (let ((process-connection-type nil) ; use a pipe
         (default-directory (cxrefs-ctx-dir ctx))
-        (program-args '("-l"))
+        (program-args '("-n" "-l"))
         (buffer (generate-new-buffer "*Cscope-Process*"))
         process)
     (buffer-disable-undo buffer)
