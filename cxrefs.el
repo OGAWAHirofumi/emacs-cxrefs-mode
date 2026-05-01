@@ -570,19 +570,18 @@ If not exists, ask to user."
     (message "Use %s backend." (car result))
     result))
 
-(defun cxrefs-check-and-build-db ()
-  (let ((ctx (cxrefs-context-current)))
-    (unless (cxrefs-ctx-backend ctx)
-      (setf (cxrefs-ctx-backend ctx) (cxrefs-select-backend ctx)))
-    (unless (cxrefs-backend-check-db ctx)
-      (cxrefs-backend-build-db ctx))))
+(defun cxrefs-check-and-build-db (ctx)
+  (unless (cxrefs-ctx-backend ctx)
+    (setf (cxrefs-ctx-backend ctx) (cxrefs-select-backend ctx)))
+  (unless (cxrefs-backend-check-db ctx)
+    (cxrefs-backend-build-db ctx)))
 
 (defun cxrefs-check-tags-table ()
   (unless cxrefs-basedir
     (setq cxrefs-basedir (cxrefs-get-basedir 'try-exists)))
   (unless (cxrefs-context-current)
     (cxrefs-context-make cxrefs-basedir))
-  (cxrefs-check-and-build-db))
+  (cxrefs-check-and-build-db (cxrefs-context-current)))
 
 ;; Mark if matches exclude regexp, but not matches include regexp
 (defun cxrefs-xref-mark-exclude (filter locations)
