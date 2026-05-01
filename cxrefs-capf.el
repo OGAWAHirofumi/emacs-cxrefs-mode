@@ -131,6 +131,7 @@ If 0, disable auto shutdown."
                  (if (listp candidates)
                      candidates
                    nil))))
+            :exclusive 'no
             ;:company-kind (lambda (_) 'function)
             :company-location (lambda (x)
                                 (and x (get-text-property 0 'location x)))
