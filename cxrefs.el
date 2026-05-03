@@ -352,7 +352,7 @@ buffers or not.  If other, kill buffers without asking."
   (let ((basedir (cxrefs-ctx-dir ctx)))
     (if (file-name-absolute-p file)
         (identity file)
-      (concat basedir file))))
+      (expand-file-name file basedir))))
 
 (defun cxrefs-xref-output (buffer ctx cmd-type string filter locations)
   (let ((exclude-info (list :func-len cxrefs-min-function-width

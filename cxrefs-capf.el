@@ -103,6 +103,15 @@ If 0, disable auto shutdown."
                   result))))
       (nreverse result))))
 
+(defun cxrefs-capf--location (arg)
+  "Return company-location for ARG."
+  (when arg
+    (when-let* ((loc (get-text-property 0 'location arg))
+                (ctx (cxrefs-capf--get-ctx))
+                (file (car loc))
+                (line (cdr loc)))
+      `(,(cxrefs-expand-file-name ctx file) . ,line))))
+
 (defun cxrefs-capf--annotation (arg)
   "Return annotation string for ARG."
   (when arg
@@ -133,8 +142,7 @@ If 0, disable auto shutdown."
                    nil))))
             :exclusive 'no
             ;:company-kind (lambda (_) 'function)
-            :company-location (lambda (x)
-                                (and x (get-text-property 0 'location x)))
+            :company-location #'cxrefs-capf--location
             :company-docsig (lambda (x)
                               (and x (get-text-property 0 'meta x)))
             :annotation-function #'cxrefs-capf--annotation))))
