@@ -107,10 +107,10 @@ If 0, disable auto shutdown."
   "Return company-location for ARG."
   (when arg
     (when-let* ((loc (get-text-property 0 'location arg))
-                (ctx (cxrefs-capf--get-ctx))
                 (file (car loc))
-                (line (cdr loc)))
-      `(,(cxrefs-expand-file-name ctx file) . ,line))))
+                (line (cdr loc))
+                (ctx (cxrefs-capf--get-ctx)))
+      (cons (cxrefs-expand-file-name ctx file) line))))
 
 (defun cxrefs-capf--annotation (arg)
   "Return annotation string for ARG."
